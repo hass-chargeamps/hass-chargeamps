@@ -1,96 +1,131 @@
 """Light platform for Chargeamps."""
 
+from __future__ import annotations
+
 import logging
+from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.components.light import (
     ColorMode,
     LightEntity,
+    LightEntityDescription,
     filter_supported_color_modes,
 )
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import ChargeampsEntity
-from .const import DOMAIN, DOMAIN_DATA, SCAN_INTERVAL  # noqa
+from . import ChargeAmpsEntity
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):  # pylint: disable=unused-argument
+@dataclass(frozen=True, kw_only=True)
+class ChargeampsLightEntityDescription(LightEntityDescription):
+    """Class describing Chargeamps light entities."""
+
+
+LIGHTS: tuple[ChargeampsLightEntityDescription, ...] = (
+    ChargeampsLightEntityDescription(
+        key="dimmer",
+        translation_key="dimmer",
+    ),
+    ChargeampsLightEntityDescription(
+        key="downlight",
+        translation_key="downlight",
+    ),
+)
+
+
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
     """Setup light platform."""
-    lights = []
-    handler = hass.data[DOMAIN_DATA]["handler"]
-    for cp_id in handler.charge_point_ids:
-        cp_info = handler.get_chargepoint_info(cp_id)
-        cp_settings = handler.get_chargepoint_settings(cp_id)
-        _LOGGER.debug("%s", cp_settings)
-        _type_to_snake = {
-                "dimmer": "dimmer",
-                "downlight":"down_light"}
-        for _type in ("dimmer", "downlight"):
-            val = getattr(cp_settings, _type_to_snake[_type], None) if cp_settings else None
-            if val is not None:
-                lights.append(ChargeampsLight(hass, f"{cp_info.name}_{cp_id}_{_type}", cp_id, _type))
-                _LOGGER.info(
-                    "Adding chargepoint %s light %s",
-                    cp_id,
-                    _type,
-                )
-    async_add_entities(lights, True)
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    entities = []
+
+    for cp_id, cp in coordinator.data["chargepoints"].items():
+        cp_settings = coordinator.data["settings"].get(cp_id)
+        if cp_settings:
+            if cp_settings.dimmer is not None:
+                entities.append(ChargeampsLight(coordinator, cp_id, LIGHTS[0]))
+            if cp_settings.down_light is not None:
+                entities.append(ChargeampsLight(coordinator, cp_id, LIGHTS[1]))
+
+    async_add_entities(entities)
 
 
-class ChargeampsLight(LightEntity, ChargeampsEntity):
+class ChargeampsLight(ChargeAmpsEntity, LightEntity):
     """Chargeamps Light class."""
 
-    def __init__(self, hass, name, charge_point_id, light_type):
-        super().__init__(hass, name, charge_point_id)
-        self._light_type = light_type
-        self._attributes["light_type"] = light_type
-        supported_color_modes = set()
-        if light_type == "dimmer":
-            supported_color_modes.add(ColorMode.BRIGHTNESS)
+    entity_description: ChargeampsLightEntityDescription
+
+    def __init__(self, coordinator, charge_point_id, description):
+        super().__init__(coordinator, charge_point_id)
+        self.entity_description = description
+        self._attr_unique_id = f"{DOMAIN}_{charge_point_id}_{description.key}"
+        if description.key == "dimmer":
+            self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
+            self._attr_color_mode = ColorMode.BRIGHTNESS
         else:
-            supported_color_modes.add(ColorMode.ONOFF)
-        supported_color_modes = filter_supported_color_modes(supported_color_modes)
-        self._attr_supported_color_modes = supported_color_modes
-        self._attr_color_mode = next(iter(self._attr_supported_color_modes))
+            self._attr_supported_color_modes = {ColorMode.ONOFF}
+            self._attr_color_mode = ColorMode.ONOFF
 
     @property
-    def unique_id(self):
-        """Return a unique ID to use for this sensor."""
-        return f"{DOMAIN}_{self.charge_point_id}_{self._light_type}"
+    def is_on(self) -> bool:
+        settings = self.coordinator.data["settings"].get(self.charge_point_id)
+        if not settings:
+            return False
+        if self.entity_description.key == "downlight":
+            return bool(settings.down_light)
+        return settings.dimmer not in ("Off", "off", None)
 
     @property
-    def is_on(self):
-        settings = self.handler.get_chargepoint_settings(self.charge_point_id)
-        if self._light_type == "downlight":
-            status = settings.down_light
-        elif self._light_type == "dimmer":
-            status = settings.dimmer
-        else:
-            return None
-        return status not in (False, None, "Off")
-
-    async def async_turn_on(self, brightness=None):
-        if brightness:
-            if brightness < 128:
-                brightness = "low"
-            elif brightness < 192:
-                brightness = "medium"
-            else:
-                brightness = "high"
-        else:
-            brightness = True if self._light_type == "downlight" else "high"
-        await self.handler.async_set_light({"chargepoint": self.charge_point_id, self._light_type: brightness})
-
-    async def async_turn_off(self):
-        await self.handler.async_set_light(
-            {
-                "chargepoint": self.charge_point_id,
-                self._light_type: False if self._light_type == "downlight" else "off",
-            }
-        )
-
-    @property
-    def brightness(self):
+    def brightness(self) -> int | None:
         """Return the brightness of this light between 0..255."""
-        brightness = {"Off": 0, "Low": 85, "Medium": 170, "High": 255}
-        return brightness.get(self.handler.get_chargepoint_settings(self.charge_point_id).dimmer)
+        if self.entity_description.key != "dimmer":
+            return None
+        settings = self.coordinator.data["settings"].get(self.charge_point_id)
+        if not settings:
+            return None
+        brightness_map = {"Off": 0, "Low": 85, "Medium": 170, "High": 255}
+        return brightness_map.get(settings.dimmer, 0)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn on the light."""
+        settings = self.coordinator.data["settings"].get(self.charge_point_id)
+        if not settings:
+            return
+
+        if self.entity_description.key == "dimmer":
+            brightness = kwargs.get("brightness")
+            if brightness is not None:
+                if brightness < 128:
+                    settings.dimmer = "Low"
+                elif brightness < 192:
+                    settings.dimmer = "Medium"
+                else:
+                    settings.dimmer = "High"
+            else:
+                settings.dimmer = "High"
+        else:
+            settings.down_light = True
+
+        await self.coordinator.client.set_chargepoint_settings(settings)
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off the light."""
+        settings = self.coordinator.data["settings"].get(self.charge_point_id)
+        if not settings:
+            return
+
+        if self.entity_description.key == "dimmer":
+            settings.dimmer = "Off"
+        else:
+            settings.down_light = False
+
+        await self.coordinator.client.set_chargepoint_settings(settings)
+        await self.coordinator.async_request_refresh()

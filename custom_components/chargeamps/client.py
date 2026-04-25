@@ -1,83 +1,84 @@
-"""Charge-Amps API Client"""
+"""Charge-Amps API Client."""
 
+import asyncio
 import logging
 import time
-from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urljoin
 
 import jwt
 from aiohttp import ClientResponse, ClientSession
-from aiohttp.web import HTTPException
-from dataclasses_json import LetterCase, dataclass_json
-
-from .utils import datetime_field
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
 
 API_BASE_URL = "https://eapi.charge.space"
 API_VERSION = "v5"
 
 
-@dataclass_json(letter_case=LetterCase.CAMEL)
-@dataclass(frozen=True)
-class ChargePointConnector:
+class ChargeAmpsBaseModel(BaseModel):
+    """Base model for Charge-Amps API data."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        from_attributes=True,
+    )
+
+
+class ChargePointConnector(ChargeAmpsBaseModel):
+    """Charge point connector model."""
     charge_point_id: str
     connector_id: int
     type: str
 
 
-@dataclass_json(letter_case=LetterCase.CAMEL)
-@dataclass(frozen=True)
-class ChargePoint:
+class ChargePoint(ChargeAmpsBaseModel):
+    """Charge point model."""
     id: str
     name: str
     password: str
     type: str
     is_loadbalanced: bool
-    firmware_version: str | None
-    hardware_version: str | None
+    firmware_version: str | None = None
+    hardware_version: str | None = None
     connectors: list[ChargePointConnector]
 
 
-@dataclass_json(letter_case=LetterCase.CAMEL)
-@dataclass(frozen=True)
-class ChargePointMeasurement:
+class ChargePointMeasurement(ChargeAmpsBaseModel):
+    """Charge point measurement model."""
     phase: str
-    current: float
-    voltage: float
+    current: float | None = None
+    voltage: float | None = None
 
 
-@dataclass_json(letter_case=LetterCase.CAMEL)
-@dataclass(frozen=True)
-class ChargePointConnectorStatus:
+class ChargePointConnectorStatus(ChargeAmpsBaseModel):
+    """Charge point connector status model."""
     charge_point_id: str
     connector_id: int
     total_consumption_kwh: float
     status: str
-    measurements: list[ChargePointMeasurement] | None
-    start_time: datetime | None = datetime_field()
-    end_time: datetime | None = datetime_field()
+    measurements: list[ChargePointMeasurement] | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
     session_id: str | None = None
 
 
-@dataclass_json(letter_case=LetterCase.CAMEL)
-@dataclass(frozen=True)
-class ChargePointStatus:
+class ChargePointStatus(ChargeAmpsBaseModel):
+    """Charge point status model."""
     id: str
     status: str
     connector_statuses: list[ChargePointConnectorStatus]
 
 
-@dataclass_json(letter_case=LetterCase.CAMEL)
-@dataclass(frozen=False)
-class ChargePointSettings:
+class ChargePointSettings(ChargeAmpsBaseModel):
+    """Charge point settings model."""
     id: str
     dimmer: str
     down_light: bool | None = None
 
 
-@dataclass_json(letter_case=LetterCase.CAMEL)
-@dataclass(frozen=False)
-class ChargePointConnectorSettings:
+class ChargePointConnectorSettings(ChargeAmpsBaseModel):
+    """Charge point connector settings model."""
     charge_point_id: str
     connector_id: int
     mode: str
@@ -86,21 +87,19 @@ class ChargePointConnectorSettings:
     max_current: float | None = None
 
 
-@dataclass_json(letter_case=LetterCase.CAMEL)
-@dataclass(frozen=True)
-class ChargingSession:
+class ChargingSession(ChargeAmpsBaseModel):
+    """Charging session model."""
     id: str
     charge_point_id: str
     connector_id: int
     session_type: str
     total_consumption_kwh: float
-    start_time: datetime | None = datetime_field()
-    end_time: datetime | None = datetime_field()
+    start_time: datetime | None = None
+    end_time: datetime | None = None
 
 
-@dataclass_json(letter_case=LetterCase.CAMEL)
-@dataclass(frozen=True)
-class StartAuth:
+class StartAuth(ChargeAmpsBaseModel):
+    """Start auth model."""
     rfid_length: int
     rfid_format: str
     rfid: str
@@ -108,109 +107,132 @@ class StartAuth:
 
 
 class ChargeAmpsClient:
+    """API Client for Charge-Amps."""
+
     def __init__(
         self,
         email: str,
         password: str,
         api_key: str,
+        session: ClientSession,
         api_base_url: str | None = None,
     ):
+        """Initialize."""
         self._logger = logging.getLogger(__name__).getChild(self.__class__.__name__)
         self._email = email
         self._password = password
         self._api_key = api_key
-        self._session = ClientSession(raise_for_status=True)
+        self._session = session
         self._headers = {}
         self._base_url = api_base_url or API_BASE_URL
-        self._ssl = False
+        self._ssl = True
         self._token = None
         self._token_expire = 0
         self._refresh_token = None
+        self._token_lock = asyncio.Lock()
 
-    async def shutdown(self) -> None:
-        await self._session.close()
+    async def _handle_response(self, response: ClientResponse) -> ClientResponse:
+        """Handle response and log errors."""
+        if response.status >= 400:
+            error_text = await response.text()
+            self._logger.error(
+                "API Error %d: %s for %s", response.status, error_text, response.url
+            )
+            response.raise_for_status()
+        return response
 
     async def _ensure_token(self) -> None:
-        if self._token_expire > time.time():
-            return
+        """Ensure we have a valid authentication token."""
+        async with self._token_lock:
+            if self._token_expire > time.time():
+                return
 
-        if self._token is None:
-            self._logger.info("Token not found")
-        elif self._token_expire > 0:
-            self._logger.info("Token expired")
+            if self._token is None:
+                self._logger.info("Token not found")
+            elif self._token_expire > 0:
+                self._logger.info("Token expired")
 
-        response = None
+            response = None
 
-        if self._refresh_token:
-            try:
-                self._logger.info("Found refresh token, try refresh")
-                response = await self._session.post(
-                    urljoin(self._base_url, f"/api/{API_VERSION}/auth/refreshToken"),
-                    ssl=self._ssl,
-                    headers={"apiKey": self._api_key},
-                    json={"token": self._token, "refreshToken": self._refresh_token},
-                )
-                self._logger.debug("Refresh successful")
-            except HTTPException:
-                self._logger.warning("Token refresh failed")
+            if self._refresh_token:
+                try:
+                    self._logger.info("Found refresh token, try refresh")
+                    response = await self._session.post(
+                        urljoin(self._base_url, f"/api/{API_VERSION}/auth/refreshToken"),
+                        ssl=self._ssl,
+                        headers={"apiKey": self._api_key},
+                        json={"token": self._token, "refreshToken": self._refresh_token},
+                    )
+                    await self._handle_response(response)
+                    self._logger.debug("Refresh successful")
+                except Exception:
+                    self._logger.warning("Token refresh failed")
+                    self._token = None
+                    self._refresh_token = None
+                    response = None
+            else:
                 self._token = None
-                self._refresh_token = None
-        else:
-            self._token = None
 
-        if self._token is None:
-            try:
-                self._logger.debug("Try login")
-                response = await self._session.post(
-                    urljoin(self._base_url, f"/api/{API_VERSION}/auth/login"),
-                    ssl=self._ssl,
-                    headers={"apiKey": self._api_key},
-                    json={"email": self._email, "password": self._password},
-                )
-                self._logger.debug("Login successful")
-            except HTTPException as exc:
-                self._logger.error("Login failed")
-                self._token = None
-                self._refresh_token = None
-                self._token_expire = 0
-                raise exc
+            if self._token is None:
+                try:
+                    self._logger.debug("Try login")
+                    response = await self._session.post(
+                        urljoin(self._base_url, f"/api/{API_VERSION}/auth/login"),
+                        ssl=self._ssl,
+                        headers={"apiKey": self._api_key},
+                        json={"email": self._email, "password": self._password},
+                    )
+                    await self._handle_response(response)
+                    self._logger.debug("Login successful")
+                except Exception as exc:
+                    self._logger.error("Login failed: %s", exc)
+                    self._token = None
+                    self._refresh_token = None
+                    self._token_expire = 0
+                    raise exc
 
-        if response is None:
-            self._logger.error("No response")
-            return
+            if response is None:
+                self._logger.error("No response during authentication")
+                return
 
-        response_payload = await response.json()
+            response_payload = await response.json()
 
-        self._token = response_payload["token"]
-        self._refresh_token = response_payload["refreshToken"]
+            self._token = response_payload["token"]
+            self._refresh_token = response_payload["refreshToken"]
 
-        token_payload = jwt.decode(self._token, options={"verify_signature": False})
-        self._token_expire = token_payload.get("exp", 0)
+            token_payload = jwt.decode(self._token, options={"verify_signature": False})
+            self._token_expire = token_payload.get("exp", 0)
 
-        self._headers["Authorization"] = f"Bearer {self._token}"
+            self._headers["Authorization"] = f"Bearer {self._token}"
 
     async def _post(self, path, **kwargs) -> ClientResponse:
+        """Perform a POST request."""
         await self._ensure_token()
         headers = kwargs.pop("headers", self._headers)
-        return await self._session.post(urljoin(self._base_url, path), ssl=self._ssl, headers=headers, **kwargs)
+        response = await self._session.post(urljoin(self._base_url, path), ssl=self._ssl, headers=headers, **kwargs)
+        return await self._handle_response(response)
 
     async def _get(self, path, **kwargs) -> ClientResponse:
+        """Perform a GET request."""
         await self._ensure_token()
         headers = kwargs.pop("headers", self._headers)
-        return await self._session.get(urljoin(self._base_url, path), ssl=self._ssl, headers=headers, **kwargs)
+        response = await self._session.get(urljoin(self._base_url, path), ssl=self._ssl, headers=headers, **kwargs)
+        return await self._handle_response(response)
 
     async def _put(self, path, **kwargs) -> ClientResponse:
+        """Perform a PUT request."""
         await self._ensure_token()
         headers = kwargs.pop("headers", self._headers)
-        return await self._session.put(urljoin(self._base_url, path), ssl=self._ssl, headers=headers, **kwargs)
+        response = await self._session.put(urljoin(self._base_url, path), ssl=self._ssl, headers=headers, **kwargs)
+        return await self._handle_response(response)
 
     async def get_chargepoints(self) -> list[ChargePoint]:
-        """Get all owned chargepoints"""
+        """Get all owned chargepoints."""
         request_uri = f"/api/{API_VERSION}/chargepoints/owned"
         response = await self._get(request_uri)
         res = []
         for chargepoint in await response.json():
-            res.append(ChargePoint.from_dict(chargepoint))
+            res.append(ChargePoint.model_validate(chargepoint))
         return res
 
     async def get_all_chargingsessions(
@@ -219,7 +241,7 @@ class ChargeAmpsClient:
         start_time: datetime | None = None,
         end_time: datetime | None = None,
     ) -> list[ChargingSession]:
-        """Get all charging sessions"""
+        """Get all charging sessions."""
         query_params = {}
         if start_time:
             query_params["startTime"] = start_time.isoformat()
@@ -229,64 +251,64 @@ class ChargeAmpsClient:
         response = await self._get(request_uri, params=query_params)
         res = []
         for session in await response.json():
-            res.append(ChargingSession.from_dict(session))
+            res.append(ChargingSession.model_validate(session))
         return res
 
     async def get_chargingsession(self, charge_point_id: str, session: int) -> ChargingSession:
-        """Get charging session"""
+        """Get charging session."""
         request_uri = f"/api/{API_VERSION}/chargepoints/{charge_point_id}/chargingsessions/{session}"
         response = await self._get(request_uri)
         payload = await response.json()
-        return ChargingSession.from_dict(payload)
+        return ChargingSession.model_validate(payload)
 
     async def get_chargepoint_status(self, charge_point_id: str) -> ChargePointStatus:
-        """Get charge point status"""
+        """Get charge point status."""
         request_uri = f"/api/{API_VERSION}/chargepoints/{charge_point_id}/status"
         response = await self._get(request_uri)
         payload = await response.json()
-        return ChargePointStatus.from_dict(payload)
+        return ChargePointStatus.model_validate(payload)
 
     async def get_chargepoint_settings(self, charge_point_id: str) -> ChargePointSettings:
-        """Get chargepoint settings"""
+        """Get chargepoint settings."""
         request_uri = f"/api/{API_VERSION}/chargepoints/{charge_point_id}/settings"
         response = await self._get(request_uri)
         payload = await response.json()
-        return ChargePointSettings.from_dict(payload)
+        return ChargePointSettings.model_validate(payload)
 
     async def set_chargepoint_settings(self, settings: ChargePointSettings) -> None:
-        """Set chargepoint settings"""
-        payload = settings.to_dict()
+        """Set chargepoint settings."""
+        payload = settings.model_dump(by_alias=True, mode="json")
         charge_point_id = settings.id
         request_uri = f"/api/{API_VERSION}/chargepoints/{charge_point_id}/settings"
         await self._put(request_uri, json=payload)
 
     async def get_chargepoint_connector_settings(self, charge_point_id: str, connector_id: int) -> ChargePointConnectorSettings:
-        """Get all owned chargepoints"""
+        """Get chargepoint connector settings."""
         request_uri = f"/api/{API_VERSION}/chargepoints/{charge_point_id}/connectors/{connector_id}/settings"
         response = await self._get(request_uri)
         payload = await response.json()
-        return ChargePointConnectorSettings.from_dict(payload)
+        return ChargePointConnectorSettings.model_validate(payload)
 
     async def set_chargepoint_connector_settings(self, settings: ChargePointConnectorSettings) -> None:
-        """Get all owned chargepoints"""
-        payload = settings.to_dict()
+        """Set chargepoint connector settings."""
+        payload = settings.model_dump(by_alias=True, mode="json")
         charge_point_id = settings.charge_point_id
         connector_id = settings.connector_id
         request_uri = f"/api/{API_VERSION}/chargepoints/{charge_point_id}/connectors/{connector_id}/settings"
         await self._put(request_uri, json=payload)
 
     async def remote_start(self, charge_point_id: str, connector_id: int, start_auth: StartAuth) -> None:
-        """Remote start chargepoint"""
-        payload = start_auth.to_dict()
+        """Remote start chargepoint."""
+        payload = start_auth.model_dump(by_alias=True, mode="json")
         request_uri = f"/api/{API_VERSION}/chargepoints/{charge_point_id}/connectors/{connector_id}/remotestart"
         await self._put(request_uri, json=payload)
 
     async def remote_stop(self, charge_point_id: str, connector_id: int) -> None:
-        """Remote stop chargepoint"""
+        """Remote stop chargepoint."""
         request_uri = f"/api/{API_VERSION}/chargepoints/{charge_point_id}/connectors/{connector_id}/remotestop"
         await self._put(request_uri, json="{}")
 
     async def reboot(self, charge_point_id) -> None:
-        """Reboot chargepoint"""
+        """Reboot chargepoint."""
         request_uri = f"/api/{API_VERSION}/chargepoints/{charge_point_id}/reboot"
         await self._put(request_uri, json="{}")

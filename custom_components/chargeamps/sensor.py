@@ -1,180 +1,210 @@
 """Sensor platform for Chargeamps."""
 
+from __future__ import annotations
+
 import logging
+from dataclasses import dataclass
+from typing import Optional
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
+    SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import STATE_UNAVAILABLE, UnitOfEnergy, UnitOfPower
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import (
+    EntityCategory,
+    STATE_UNAVAILABLE,
+    UnitOfEnergy,
+    UnitOfPower,
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
+)
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import ChargeampsEntity
-from .const import CHARGEPOINT_ONLINE, DOMAIN_DATA, SCAN_INTERVAL  # noqa
+from . import ChargeAmpsEntity
+from .const import CHARGEPOINT_ONLINE, DOMAIN, ICON_MAP, DEFAULT_ICON, STATUS_OCPP_MAP, STATUS_CAPI_MAP
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):  # pylint: disable=unused-argument
+@dataclass(frozen=True, kw_only=True)
+class ChargeampsSensorEntityDescription(SensorEntityDescription):
+    """Class describing Chargeamps sensor entities."""
+
+
+CONNECTOR_SENSORS: tuple[ChargeampsSensorEntityDescription, ...] = (
+    ChargeampsSensorEntityDescription(
+        key="status",
+        translation_key="status",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ChargeampsSensorEntityDescription(
+        key="power",
+        translation_key="power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    ChargeampsSensorEntityDescription(
+        key="l1_current",
+        translation_key="l1_current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ChargeampsSensorEntityDescription(
+        key="l2_current",
+        translation_key="l2_current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ChargeampsSensorEntityDescription(
+        key="l3_current",
+        translation_key="l3_current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ChargeampsSensorEntityDescription(
+        key="l1_voltage",
+        translation_key="l1_voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ChargeampsSensorEntityDescription(
+        key="l2_voltage",
+        translation_key="l2_voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ChargeampsSensorEntityDescription(
+        key="l3_voltage",
+        translation_key="l3_voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+)
+
+CHARGEPOINT_SENSORS: tuple[ChargeampsSensorEntityDescription, ...] = (
+    ChargeampsSensorEntityDescription(
+        key="total_energy",
+        translation_key="total_energy",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+    ),
+)
+
+
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
     """Setup sensor platform."""
-    sensors = []
-    handler = hass.data[DOMAIN_DATA]["handler"]
-    for cp_id in handler.charge_point_ids:
-        cp_info = handler.get_chargepoint_info(cp_id)
-        sensors.append(
-            ChargeampsTotalEnergy(
-                hass,
-                f"{cp_info.name}_{cp_id}_total_energy",
-                cp_id,
-            )
-        )
-        for connector in cp_info.connectors:
-            sensors.append(
-                ChargeampsSensor(
-                    hass,
-                    f"{cp_info.name}_{connector.charge_point_id}_{connector.connector_id}",
-                    connector.charge_point_id,
-                    connector.connector_id,
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    entities = []
+
+    for cp_id, cp in coordinator.data["chargepoints"].items():
+        for description in CHARGEPOINT_SENSORS:
+            entities.append(ChargeampsChargePointSensor(coordinator, cp_id, description))
+
+        for connector in cp.connectors:
+            for description in CONNECTOR_SENSORS:
+                entities.append(
+                    ChargeampsConnectorSensor(coordinator, cp_id, connector.connector_id, description)
                 )
-            )
-            sensors.append(
-                ChargeampsPowerSensor(
-                    hass,
-                    f"{cp_info.name} {connector.charge_point_id} {connector.connector_id} Power",
-                    connector.charge_point_id,
-                    connector.connector_id,
-                )
-            )
-            _LOGGER.info(
-                "Adding chargepoint %s connector %s",
-                connector.charge_point_id,
-                connector.connector_id,
-            )
-    async_add_entities(sensors, True)
+
+    async_add_entities(entities)
 
 
-class ChargeampsSensor(ChargeampsEntity, SensorEntity):
-    """Chargeamps Sensor class."""
+class ChargeampsConnectorSensor(ChargeAmpsEntity, SensorEntity):
+    """Chargeamps Connector Sensor class."""
 
-    def __init__(self, hass, name, charge_point_id, connector_id):
-        super().__init__(hass, name, charge_point_id, connector_id)
-        self._interviewed = False
+    entity_description: ChargeampsSensorEntityDescription
 
-    async def interview(self):
-        chargepoint_info = self.handler.get_chargepoint_info(self.charge_point_id)
-        connector_info = self.handler.get_connector_info(self.charge_point_id, self.connector_id)
-        self._attributes["chargepoint_type"] = chargepoint_info.type
-        self._attributes["connector_type"] = connector_info.type
-        self._interviewed = True
-
-    async def async_update(self):
-        """Update the sensor."""
-        _LOGGER.debug(
-            "Update chargepoint %s connector %s",
-            self.charge_point_id,
-            self.connector_id,
-        )
-        await self.handler.update_data(self.charge_point_id)
-        _LOGGER.debug(
-            "Finished update chargepoint %s connector %s",
-            self.charge_point_id,
-            self.connector_id,
-        )
-        cp_status = self.handler.get_chargepoint_status(self.charge_point_id)
-        status = self.handler.get_connector_status(self.charge_point_id, self.connector_id)
-        if status is None:
-            return
-        if cp_status.status != CHARGEPOINT_ONLINE:
-            self._state = STATE_UNAVAILABLE
-        else:
-            self._state = status.status
-        self._attributes["total_consumption_kwh"] = round(status.total_consumption_kwh, 3)
-        if not self._interviewed:
-            await self.interview()
-
-
-class ChargeampsTotalEnergy(ChargeampsEntity, SensorEntity):
-    """Chargeamps Total Energy class."""
-
-    def __init__(self, hass, name, charge_point_id):
-        super().__init__(hass, name, charge_point_id, "total_energy")
-        del self._attributes["connector_id"]
-
-    async def async_update(self):
-        """Update the sensor."""
-        _LOGGER.debug(
-            "Update chargepoint %s",
-            self.charge_point_id,
-        )
-        await self.handler.update_data(self.charge_point_id)
-        self._state = self.handler.get_chargepoint_total_energy(self.charge_point_id)
-        _LOGGER.debug(
-            "Finished update chargepoint %s",
-            self.charge_point_id,
-        )
+    def __init__(self, coordinator, charge_point_id, connector_id, description):
+        super().__init__(coordinator, charge_point_id, connector_id)
+        self.entity_description = description
+        self._attr_unique_id = f"{DOMAIN}_{charge_point_id}_{connector_id}_{description.key}"
 
     @property
-    def device_class(self):
-        """Return the device class of the sensor."""
-        return SensorDeviceClass.ENERGY
+    def native_value(self) -> float | str | None:
+        cp_status = self.coordinator.data["status"].get(self.charge_point_id)
+        if not cp_status:
+            return None
+
+        for conn_status in cp_status.connector_statuses:
+            if conn_status.connector_id == self.connector_id:
+                if self.entity_description.key == "status":
+                    if cp_status.status != CHARGEPOINT_ONLINE:
+                        return STATE_UNAVAILABLE
+                    raw_status = str(conn_status.status)
+                    return STATUS_OCPP_MAP.get(raw_status, STATUS_CAPI_MAP.get(raw_status, raw_status))
+
+                if self.entity_description.key == "power":
+                    if conn_status.measurements:
+                        return round(sum((m.current or 0.0) * (m.voltage or 0.0) for m in conn_status.measurements), 1)
+                    return 0.0
+
+                if "current" in self.entity_description.key or "voltage" in self.entity_description.key:
+                    phase = self.entity_description.key.split("_")[0].upper()
+                    if conn_status.measurements:
+                        for m in conn_status.measurements:
+                            if m.phase == phase:
+                                return round(m.current, 2) if "current" in self.entity_description.key else round(m.voltage, 1)
+                    return 0.0
+        return None
 
     @property
-    def state_class(self):
-        """Return the state class of the sensor."""
-        return SensorStateClass.TOTAL_INCREASING
+    def icon(self) -> str | None:
+        if self.entity_description.key == "status":
+            if self.connector_name == "Schuko":
+                return ICON_MAP.get("Schuko", DEFAULT_ICON)
+            cp = self.coordinator.data["chargepoints"].get(self.charge_point_id)
+            if cp:
+                for conn in cp.connectors:
+                    if conn.connector_id == self.connector_id:
+                        return ICON_MAP.get(conn.type, DEFAULT_ICON)
+        return super().icon
 
     @property
-    def unit_of_measurement(self):
-        """Return the unit of measurement."""
-        return UnitOfEnergy.KILO_WATT_HOUR
+    def extra_state_attributes(self) -> dict:
+        attrs = {"charge_point_id": self.charge_point_id, "connector_id": self.connector_id}
+        if self.entity_description.key == "status":
+            cp_status = self.coordinator.data["status"].get(self.charge_point_id)
+            if cp_status:
+                for conn_status in cp_status.connector_statuses:
+                    if conn_status.connector_id == self.connector_id:
+                        attrs["total_consumption_kwh"] = round(conn_status.total_consumption_kwh, 3)
+                        attrs["raw_status"] = conn_status.status
+                        break
+        return attrs
 
 
-class ChargeampsPowerSensor(ChargeampsEntity, SensorEntity):
-    """Chargeamps Power Sensor class."""
+class ChargeampsChargePointSensor(ChargeAmpsEntity, SensorEntity):
+    """Chargeamps ChargePoint Sensor class."""
 
-    async def async_update(self):
-        """Update the sensor."""
-        _LOGGER.debug(
-            "Update chargepoint %s connector %s",
-            self.charge_point_id,
-            self.connector_id,
-        )
-        await self.handler.update_data(self.charge_point_id)
-        _LOGGER.debug(
-            "Finished update chargepoint %s connector %s",
-            self.charge_point_id,
-            self.connector_id,
-        )
-        measurements = self.handler.get_connector_measurements(self.charge_point_id, self.connector_id)
-        if measurements:
-            self._state = round(sum([phase.current * phase.voltage for phase in measurements]), 0)
-            self._attributes["active_phase"] = " ".join([i.phase for i in measurements if i.current > 0])
-            for measure in measurements:
-                self._attributes[f"{measure.phase.lower()}_power"] = round(measure.voltage * measure.current, 0)
-                self._attributes[f"{measure.phase.lower()}_current"] = round(measure.current, 1)
-        else:
-            self._attributes["active_phase"] = ""
-            for phase in range(1, 4):
-                for measure in ("power", "current"):
-                    self._attributes[f"l{phase}_{measure}"] = 0
-            self._state = 0
+    entity_description: ChargeampsSensorEntityDescription
+
+    def __init__(self, coordinator, charge_point_id, description):
+        super().__init__(coordinator, charge_point_id)
+        self.entity_description = description
+        self._attr_unique_id = f"{DOMAIN}_{charge_point_id}_{description.key}"
 
     @property
-    def unique_id(self):
-        """Return a unique ID to use for this sensor."""
-        return f"{super().unique_id}_power"
-
-    @property
-    def device_class(self):
-        """Return the device class of the sensor."""
-        return SensorDeviceClass.POWER
-
-    @property
-    def state_class(self):
-        """Return the state class of the sensor."""
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def unit_of_measurement(self):
-        """Return the unit of measurement."""
-        return UnitOfPower.WATT
+    def native_value(self) -> float | None:
+        if self.entity_description.key == "total_energy":
+            return self.coordinator.data["total_energy"].get(self.charge_point_id)
+        return None
