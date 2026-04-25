@@ -300,6 +300,8 @@ class ChargeAmpsEntity(CoordinatorEntity[ChargeAmpsDataUpdateCoordinator]):
         super().__init__(coordinator)
         self.charge_point_id = charge_point_id
         self.connector_id = connector_id
+        if connector_id is not None:
+            self._attr_translation_placeholders = {"connector": self.connector_name}
 
     @property
     def charge_point_name(self) -> str:

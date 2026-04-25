@@ -23,7 +23,7 @@
   "entity": {
     "sensor": {
       "status": {
-        "name": "Status",
+        "name": "{connector} Status",
         "state": {
           "available": "Available",
           "preparing": "Preparing",
@@ -39,48 +39,48 @@
         }
       },
       "power": {
-        "name": "Power"
+        "name": "{connector} Power"
       },
       "total_energy": {
         "name": "Total energy"
       },
       "l1_current": {
-        "name": "L1 current"
+        "name": "{connector} L1 current"
       },
       "l2_current": {
-        "name": "L2 current"
+        "name": "{connector} L2 current"
       },
       "l3_current": {
-        "name": "L3 current"
+        "name": "{connector} L3 current"
       },
       "l1_voltage": {
-        "name": "L1 voltage"
+        "name": "{connector} L1 voltage"
       },
       "l2_voltage": {
-        "name": "L2 voltage"
+        "name": "{connector} L2 voltage"
       },
       "l3_voltage": {
-        "name": "L3 voltage"
+        "name": "{connector} L3 voltage"
       }
     },
     "binary_sensor": {
       "cable_connected": {
-        "name": "Cable connected"
+        "name": "{connector} Cable connected"
       }
     },
     "switch": {
       "enable": {
-        "name": "Enable"
+        "name": "{connector}"
       }
     },
     "lock": {
       "cable_lock": {
-        "name": "Cable lock"
+        "name": "{connector} Cable lock"
       }
     },
     "number": {
       "max_current": {
-        "name": "Max current"
+        "name": "{connector} Max current"
       }
     },
     "button": {
