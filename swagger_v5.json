@@ -1,0 +1,4651 @@
+{
+  "x-generator": "NSwag v14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))",
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Charge Amps External REST API5",
+    "description": "\n<p>\n    Charge Amps external api is intended for integration purposes. Both private and enterprise users can use it.\n    Besides the functionality described below the api provides the following callbacks/web hooks:\n</p>\n<ul>\n    <li>POST chargepoints/{chargepointid}/boot, returns <a href='#model-ChargePoint'>ChargePoint</a></li>\n    <li>POST chargepoints/{chargepointid}/heartbeat, returns <a href='#model-ChargePointStatus'>ChargePointStatus</a></li>\n    <li>POST chargepoints/{chargepointid}/metervalue, returns <a href='#model-MeterValues'>MeterValues</a></li>\n    <li>POST chargepoints/{chargepointid}/connectors/{connectorid}/start, returns <a href='#model-ChargingSession'>ChargingSession</a></li>\n    <li>POST chargepoints/{chargepointid}/connectors/{connectorid}/stop, returns <a href='#model-ChargingSession'>ChargingSession</a></li>\n</ul>\n<p>\n</p>\n<p>\n    <h3>\n        CAPI and OCPP, important to note\n    </h3>\n</p>\n<p>\n    Two different protocols\n    <ul>\n        <li>\n            CAPI, Charge point API, is Charge Amps’ proprietary interface between our cloud and each charger.\n        </li>\n        <li>\n            OCPP, Open Charge Point Protocol, is based on an open standard to enable interoperability between different EV chargers and clouds.\n        </li>\n    </ul>\n</p>\n<p>\n    How this affects your API client\n    <ul>\n        <li>\n            Both protocols are used within Charge Amps and since some functionalities differ, the API user will need to check which protocol is used for a charger. This in turn tells you how to interpret the charge point status.\n        </li>\n    </ul>\n<p>\n<p>\n    To know what protocol is in use, check the property “ocppVersion” of the following endpoints:\n    <ul>\n        <li>\n            /chargepoints/{chargepointId}\n        </li>\n        <li>\n            /chargepoints/owned\n        </li>\n    </ul>\n</p>\n<p>\n    ocppVersion can have the following values:\n    <ul>\n        <li>\n            Value (string) - Description\n        </li>\n        <li>\n            null - The charge point uses the CAPI protocol\n        </li>\n        <li>\n            1.6 - The charge point uses the OCPP protocol\n        </li>\n    </ul>\n</p>\n<p>\n</p>\n<p>\n    Changes in version 5 of EAPI:\n</p>\n<ul>\n    <li>Support for read-only access to chargers, based on organisation setting</li>\n    <li>Extended support for single connector owner on Charge Amps Aura chargers</li>\n</ul>\n<p>\n    Note: version 3 is depricated and will be removed in 2022.\n</p>\n<p>\n</p>\n<p>\n    Please contact support for more extensive documentation and api key.\n</p>",
+    "termsOfService": "https://chargeamps.com/terms-of-service/",
+    "contact": {
+      "name": "Charge Amps Support",
+      "url": "https://chargeamps.com/support"
+    },
+    "version": "v5"
+  },
+  "servers": [
+    {
+      "url": "https://eapi.charge.space"
+    }
+  ],
+  "paths": {
+    "/api/v5/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Authenticates an enterprise or private user for using the api. A Bearer token is returned if the login is successful. A refresh token\nis also returned which can be used to get a new bearer token in case the former one has expired.\nNote that an api key also needs to provided in the header.",
+        "operationId": "Auth_Login",
+        "parameters": [
+          {
+            "name": "apiKey",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "userCredentials",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCredentials"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v5/auth/refreshtoken": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Gets a new bearer token (and a refresh token) if the former one has expired.\nNote, the expired token with the refresh token has to be sent in on order to get new ones",
+        "operationId": "Auth_RefreshTokens",
+        "requestBody": {
+          "x-name": "tokenRefresh",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRefresh"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenRefresh"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v5/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Register new user for external application like mobile",
+        "operationId": "Auth_Register",
+        "parameters": [
+          {
+            "name": "apiKey",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 2
+          },
+          {
+            "name": "hostUrl",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "user",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v5/partners/{partnerId}/rfids/{rfid}": {
+      "get": {
+        "tags": [
+          "Partner"
+        ],
+        "summary": "Get RFID for partner",
+        "operationId": "Partner_GetRfid",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "rfid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "rfidFormat",
+            "in": "query",
+            "description": "Required when rfid is supplied and not in hex format",
+            "schema": {
+              "nullable": true,
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/RfidFormat"
+                }
+              ]
+            },
+            "x-position": 3
+          },
+          {
+            "name": "rfidLength",
+            "in": "query",
+            "description": "Required when rfid is supplied and not in hex format",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 4
+          },
+          {
+            "name": "rfidDecimalFormatLength",
+            "in": "query",
+            "description": "Required when caller wants to pad returned decimal to a specific length",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 5
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RfidTag"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/partners/{partnerId}/rfids": {
+      "get": {
+        "tags": [
+          "Partner"
+        ],
+        "summary": "Get RFID tags for partner",
+        "operationId": "Partner_GetRfidAll",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RfidTag"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Partner"
+        ],
+        "summary": "Create RFID for partner, not connected to organisation",
+        "description": "RFID hexadecimal is used in the transfer encoding Base16, in which each byte of the plaintext is broken into two 4-bit values and represented by two hexadecimal digits.",
+        "operationId": "Partner_CreateRfid",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "rfidTag",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RfidTagCreate"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RfidTag"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/partners/{partnerId}/rfids/{rfid}/revoke": {
+      "put": {
+        "tags": [
+          "Partner"
+        ],
+        "summary": "Revoke specific RFID for partner",
+        "operationId": "Partner_RevokeRfid",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "rfid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "NoContent"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/users/{userId}": {
+      "get": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Get logged in user's details",
+        "operationId": "User_Get",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}/status": {
+      "get": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Get charge point and it's connectors status. Note that measurement is only set if the connector is in charging mode.",
+        "operationId": "ChargePoint_GetStatus",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChargePointStatus"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/callbacks/enable": {
+      "put": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Enable callback on chargepoints",
+        "operationId": "ChargePoint_Enable",
+        "requestBody": {
+          "x-name": "callback",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Callback"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/callbacks/disable": {
+      "put": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Disable callback on chargepoints",
+        "operationId": "ChargePoint_Disable",
+        "requestBody": {
+          "x-name": "callback",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Callback"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/owned": {
+      "get": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Get owned chargepoints",
+        "operationId": "ChargePoint_GetAll",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChargePoint"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}/reboot": {
+      "put": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Boot chargepoint",
+        "operationId": "ChargePoint_Boot",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}/register": {
+      "put": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Register chargepoint to auth user",
+        "operationId": "ChargePoint_Register",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "regInfo",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChargePointRegistrationInfo"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized\nor\nUnauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "x-expectedSchemas": [
+              {
+                "description": "Unauthorized",
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              {
+                "description": "Unauthorized",
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}/unregister": {
+      "put": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Unregister chargepoint from user if any",
+        "operationId": "ChargePoint_Unregister",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "chargePointAuth",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChargePointAuth"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized\nor\nUnauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "x-expectedSchemas": [
+              {
+                "description": "Unauthorized",
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              {
+                "description": "Unauthorized",
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            ]
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}": {
+      "get": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Get chargepoint. Expands with settings for charge point and connectors if query parameter expand=settings is applied.",
+        "operationId": "ChargePoint_Get",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "description": "{settings}",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChargePoint"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}/settings": {
+      "get": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Get chargepoint's settings",
+        "operationId": "ChargePoint_GetSettings",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ViewChargePointSettings"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Update chargepoint's settings",
+        "operationId": "ChargePoint_UpdateSettings",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "settings",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChargePointSettings"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}/chargingsessions": {
+      "get": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Get chargepoint's charging sessions. All parameters are optional, but in order to limit the number of resulting sessions,\nit is recommended that at least one parameter is set.",
+        "operationId": "ChargePoint_GetChargingSessions",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "startTime",
+            "in": "query",
+            "description": "Optional",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "x-position": 2
+          },
+          {
+            "name": "endTime",
+            "in": "query",
+            "description": "Optional",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "x-position": 3
+          },
+          {
+            "name": "maxCount",
+            "in": "query",
+            "description": "Maximum number of sessions. Optional",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 4
+          },
+          {
+            "name": "rfidDecimalFormatLength",
+            "in": "query",
+            "description": "Required when rfid decimal format should be padded to a specific length",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 5
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChargingSession"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}/chargingsessions/{chargingSessionId}": {
+      "get": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Get connector's charging session",
+        "operationId": "ChargePoint_GetChargingSession",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "chargingSessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "rfidDecimalFormatLength",
+            "in": "query",
+            "description": "Required when rfid decimal format should be padded to a specific length",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChargingSession"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}/connectors/{connectorId}/chargingsessions": {
+      "get": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Get connector's charging sessions. All parameters are optional, but in order to limit the number of resulting sessions,\nit is recommended that at least one parameter is set.",
+        "operationId": "ChargePoint_GetChargingSessions2",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "connectorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "startTime",
+            "in": "query",
+            "description": "Optional",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "x-position": 3
+          },
+          {
+            "name": "endTime",
+            "in": "query",
+            "description": "Optional",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "x-position": 4
+          },
+          {
+            "name": "maxCount",
+            "in": "query",
+            "description": "Maximum number of sessions. Optional",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 5
+          },
+          {
+            "name": "rfidDecimalFormatLength",
+            "in": "query",
+            "description": "Required when rfid decimal format should be padded to a specific length",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 6
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChargingSession"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}/connectors/{connectorId}/settings": {
+      "get": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Get connector's settings",
+        "operationId": "ChargePoint_GetConnectorSettings",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "connectorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ViewConnectorSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Update connector's settings",
+        "operationId": "ChargePoint_UpdateConnectorSettings",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "connectorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "settings",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConnectorSettings"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}/partner": {
+      "get": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Get partner for charge point",
+        "operationId": "ChargePoint_GetPartner",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Partner"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}/connectors/{connectorId}/remotestart": {
+      "put": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Remote start chargepoint. Only makes sense if rifdlock is on.",
+        "operationId": "ChargePoint_RemoteStart",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "connectorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "startAuth",
+          "description": "rfid needs to be in hexadecimal format (4, 7 or 10 bytes)",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartAuth"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 3
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}/connectors/{connectorId}/remotestop": {
+      "put": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Remote stop chargepoint. Only makes sense if rifdlock is on.",
+        "operationId": "ChargePoint_RemoteStop",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "connectorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}/connectors/{connectorId}/schedule/override": {
+      "put": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "operationId": "ChargePoint_OverrideScheduleForOngoingChargingSession",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "connectorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}/schedule/override/status": {
+      "get": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "operationId": "ChargePoint_GetScheduleOverrideStatus",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectorScheduleOverrideStatus"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}/schedules": {
+      "get": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Get chargepoint's schedules. For CAPI chargers only.",
+        "operationId": "ChargePoint_GetSchedules",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Schedule"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Update schedule. For CAPI chargers only.",
+        "operationId": "ChargePoint_UpdateSchedule",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "schedule",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Creates schedule. For CAPI chargers only.",
+        "operationId": "ChargePoint_CreateSchedule",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "schedule",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/chargepoints/{chargePointId}/schedules/{scheduleId}": {
+      "get": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Get chargepoint's schedule. For CAPI chargers only.",
+        "operationId": "ChargePoint_GetScheduleById",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "scheduleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "ChargePoint"
+        ],
+        "summary": "Delete schedule. For CAPI chargers only.",
+        "operationId": "ChargePoint_DeleteSchedule",
+        "parameters": [
+          {
+            "name": "chargePointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "scheduleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Private",
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/organisations/{organisationId}/chargepoints/statuses": {
+      "get": {
+        "tags": [
+          "Organisation"
+        ],
+        "summary": "Get organisation's charge point and it's connectors status. Note that measurement is only set if the connector is in charging mode.",
+        "operationId": "Organisation_GetChargePointsStatusesForOrganisation",
+        "parameters": [
+          {
+            "name": "organisationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChargePointStatus"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/organisations": {
+      "get": {
+        "tags": [
+          "Organisation"
+        ],
+        "summary": "Get organisations",
+        "operationId": "Organisation_GetOrganisations",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Organisation"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/organisations/{organisationId}": {
+      "get": {
+        "tags": [
+          "Organisation"
+        ],
+        "summary": "Get organisation",
+        "operationId": "Organisation_GetById",
+        "parameters": [
+          {
+            "name": "organisationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Organisation"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/organisations/{organisationId}/chargepoints": {
+      "get": {
+        "tags": [
+          "Organisation"
+        ],
+        "summary": "Get organisation's chargepoints",
+        "operationId": "Organisation_GetChargePointsForOrganisation",
+        "parameters": [
+          {
+            "name": "organisationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChargePoint"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/organisations/{organisationId}/chargingsessions": {
+      "get": {
+        "tags": [
+          "Organisation"
+        ],
+        "summary": "Get organisation's charging sessions",
+        "operationId": "Organisation_GetChargingSessions",
+        "parameters": [
+          {
+            "name": "organisationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "startTime",
+            "in": "query",
+            "description": "Optional",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "x-position": 2
+          },
+          {
+            "name": "endTime",
+            "in": "query",
+            "description": "Optional",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "nullable": true
+            },
+            "x-position": 3
+          },
+          {
+            "name": "rfid",
+            "in": "query",
+            "description": "Optional. Rfid used for searching.",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 4
+          },
+          {
+            "name": "rfidFormat",
+            "in": "query",
+            "description": "Required when rfid is supplied and not in hex format.",
+            "schema": {
+              "nullable": true,
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/RfidFormat"
+                }
+              ]
+            },
+            "x-position": 5
+          },
+          {
+            "name": "rfidLength",
+            "in": "query",
+            "description": "Required when rfid is supplied and not in hex format. Length of tag (4, 7 or 10 bytes).",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 6
+          },
+          {
+            "name": "rfidDecimalFormatLength",
+            "in": "query",
+            "description": "Required when caller wants to pad returned decimal to a specific length",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 7
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChargingSession"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/organisations/{organisationId}/users": {
+      "get": {
+        "tags": [
+          "Organisation"
+        ],
+        "summary": "Get users for organisation",
+        "operationId": "Organisation_GetUsers",
+        "parameters": [
+          {
+            "name": "organisationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "description": "Optional. Valid values are {rfid}.",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 2
+          },
+          {
+            "name": "rfidDecimalFormatLength",
+            "in": "query",
+            "description": "Required when caller wants to pad returned decimal to a specific length",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserView"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFound",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Organisation"
+        ],
+        "summary": "Create user (and RFID tags if any). Note that password has to contain at least 8 characters.",
+        "description": "RFID hexadecimal is used in the transfer encoding Base16, in which each byte of the plaintext is broken into two 4-bit values and represented by two hexadecimal digits.",
+        "operationId": "Organisation_CreateUser",
+        "parameters": [
+          {
+            "name": "organisationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "user",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/organisations/{organisationId}/users/{userId}": {
+      "get": {
+        "tags": [
+          "Organisation"
+        ],
+        "summary": "Get user for organisation",
+        "operationId": "Organisation_GetUserById",
+        "parameters": [
+          {
+            "name": "organisationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "description": "Optional. Valid values are {rfid}.",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 3
+          },
+          {
+            "name": "rfidDecimalFormatLength",
+            "in": "query",
+            "description": "Required when caller wants to pad returned decimal to a specific length",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 4
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/organisations/{organisationId}/partner": {
+      "get": {
+        "tags": [
+          "Organisation"
+        ],
+        "summary": "Get partner for organisation",
+        "operationId": "Organisation_GetPartner",
+        "parameters": [
+          {
+            "name": "organisationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Partner"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/organisations/{organisationId}/rfids": {
+      "get": {
+        "tags": [
+          "Organisation"
+        ],
+        "summary": "Get RFIDs for organisation",
+        "operationId": "Organisation_GetRfids",
+        "parameters": [
+          {
+            "name": "organisationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "rfidDecimalFormatLength",
+            "in": "query",
+            "description": "Required when caller wants to pad returned decimal to a specific length",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RfidTag"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Organisation"
+        ],
+        "summary": "Create RFID",
+        "description": "RFID hexadecimal is used in the transfer encoding Base16, in which each byte of the plaintext is broken into two 4-bit values and represented by two hexadecimal digits.",
+        "operationId": "Organisation_CreateRfid",
+        "parameters": [
+          {
+            "name": "organisationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "rfidDecimalFormatLength",
+            "in": "query",
+            "description": "Required when caller wants to pad returned decimal to a specific length",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "rfidTag",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RfidTagCreate"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RfidTag"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/organisations/{organisationId}/rfids/{rfid}": {
+      "get": {
+        "tags": [
+          "Organisation"
+        ],
+        "summary": "Get RFID",
+        "operationId": "Organisation_GetRfid",
+        "parameters": [
+          {
+            "name": "organisationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "rfid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "rfidFormat",
+            "in": "query",
+            "description": "Required when RFID is supplied and not in hex format",
+            "schema": {
+              "nullable": true,
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/RfidFormat"
+                }
+              ]
+            },
+            "x-position": 3
+          },
+          {
+            "name": "rfidLength",
+            "in": "query",
+            "description": "Required when RFID is supplied and not in hex format",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 4
+          },
+          {
+            "name": "rfidDecimalFormatLength",
+            "in": "query",
+            "description": "Required when caller wants to pad returned decimal to a specific length",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 5
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RfidTag"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v5/organisations/{organisationId}/rfids/{rfid}/revoke": {
+      "put": {
+        "tags": [
+          "Organisation"
+        ],
+        "summary": "Revoke specific RFID for organisation",
+        "operationId": "Organisation_RevokeRfid",
+        "parameters": [
+          {
+            "name": "organisationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "rfid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "NoContent"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": [
+              "Enterprise"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LoginResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "token": {
+            "type": "string",
+            "nullable": true
+          },
+          "user": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UserView"
+              }
+            ]
+          },
+          "refreshToken": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "UserView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "mobile": {
+            "type": "string",
+            "nullable": true
+          },
+          "rfidTags": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/RfidTag"
+            }
+          },
+          "userStatus": {
+            "$ref": "#/components/schemas/UserStatus"
+          }
+        }
+      },
+      "RfidTag": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "rfid": {
+            "type": "string",
+            "nullable": true
+          },
+          "rfidDec": {
+            "type": "string",
+            "nullable": true
+          },
+          "rfidDecReverse": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "UserStatus": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "New",
+          "Valid",
+          "Locked"
+        ],
+        "enum": [
+          "New",
+          "Valid",
+          "Locked"
+        ]
+      },
+      "UserCredentials": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "password": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TokenRefresh": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "type": "string",
+            "nullable": true
+          },
+          "refreshToken": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "HttpErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "messageCode": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "UserCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "mobile": {
+            "type": "string",
+            "nullable": true
+          },
+          "rfidTags": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/RfidTagCreate"
+            }
+          },
+          "password": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "RfidTagCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rfidLength": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rfidFormat": {
+            "$ref": "#/components/schemas/RfidFormat"
+          },
+          "rfid": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "RfidFormat": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Hex",
+          "Dec",
+          "ReverseDec"
+        ],
+        "enum": [
+          "Hex",
+          "Dec",
+          "ReverseDec"
+        ]
+      },
+      "ChargePointStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/ChargePointStatusType"
+          },
+          "connectorStatuses": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/ConnectorStatus"
+            }
+          }
+        }
+      },
+      "ChargePointStatusType": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Online",
+          "Offline"
+        ],
+        "enum": [
+          "Online",
+          "Offline"
+        ]
+      },
+      "ConnectorStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "chargePointId": {
+            "type": "string",
+            "nullable": true
+          },
+          "connectorId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalConsumptionKwh": {
+            "type": "number",
+            "format": "double"
+          },
+          "chargingPowerKw": {
+            "type": "number",
+            "format": "double"
+          },
+          "sessionType": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SessionType"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "measurements": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/Measurement"
+            }
+          },
+          "startTime": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "endTime": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "sessionId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
+      "SessionType": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "OnePhase",
+          "ThreePhase",
+          "Schuko"
+        ],
+        "enum": [
+          "OnePhase",
+          "ThreePhase",
+          "Schuko"
+        ]
+      },
+      "Measurement": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "phase": {
+            "$ref": "#/components/schemas/Phase"
+          },
+          "current": {
+            "type": "number",
+            "format": "float"
+          },
+          "voltage": {
+            "type": "number",
+            "format": "float"
+          }
+        }
+      },
+      "Phase": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "L1",
+          "L2",
+          "L3"
+        ],
+        "enum": [
+          "L1",
+          "L2",
+          "L3"
+        ]
+      },
+      "Callback": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "chargePointIds": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ChargePoint": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "password": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "isLoadbalanced": {
+            "type": "boolean"
+          },
+          "firmwareVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "hardwareVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "ownerReadOnly": {
+            "type": "boolean"
+          },
+          "ocppVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "settings": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ChargePointSettings"
+              }
+            ]
+          },
+          "connectors": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/Connector"
+            }
+          }
+        }
+      },
+      "ChargePointSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "dimmer": {
+            "$ref": "#/components/schemas/DimmerValue"
+          },
+          "downLight": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "maxCurrent": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
+          }
+        }
+      },
+      "DimmerValue": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Off",
+          "Low",
+          "Medium",
+          "High"
+        ],
+        "enum": [
+          "Off",
+          "Low",
+          "Medium",
+          "High"
+        ]
+      },
+      "Connector": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "chargePointId": {
+            "type": "string",
+            "nullable": true
+          },
+          "connectorId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ConnectorFunctionType"
+          },
+          "settings": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ConnectorSettings"
+              }
+            ]
+          },
+          "connectorUserId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          }
+        }
+      },
+      "ConnectorFunctionType": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Charger",
+          "Schuko"
+        ],
+        "enum": [
+          "Charger",
+          "Schuko"
+        ]
+      },
+      "ConnectorSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "chargePointId": {
+            "type": "string",
+            "nullable": true
+          },
+          "connectorId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxCurrent": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
+          },
+          "rfidLock": {
+            "type": "boolean"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/OnOffMode"
+          },
+          "cableLock": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OnOffMode": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Off",
+          "On",
+          "Schedule"
+        ],
+        "enum": [
+          "Off",
+          "On",
+          "Schedule"
+        ]
+      },
+      "ChargePointRegistrationInfo": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ChargePointAuth"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "chargePointName": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          }
+        ]
+      },
+      "ChargePointAuth": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "chargePointId",
+          "password"
+        ],
+        "properties": {
+          "chargePointId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "ViewChargePointSettings": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ChargePointSettings"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "installationCurrent": {
+                "type": "integer",
+                "format": "int32",
+                "nullable": true
+              }
+            }
+          }
+        ]
+      },
+      "ChargingSession": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "chargePointId": {
+            "type": "string",
+            "nullable": true
+          },
+          "connectorId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "userId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "rfid": {
+            "type": "string",
+            "nullable": true
+          },
+          "rfidDec": {
+            "type": "string",
+            "nullable": true
+          },
+          "rfidDecReverse": {
+            "type": "string",
+            "nullable": true
+          },
+          "organisationId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "sessionType": {
+            "$ref": "#/components/schemas/SessionType"
+          },
+          "startTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endTime": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "externalTransactionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalConsumptionKwh": {
+            "type": "number",
+            "format": "double"
+          },
+          "externalId": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ViewConnectorSettings": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ConnectorSettings"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "installationCurrent": {
+                "type": "integer",
+                "format": "int32"
+              }
+            }
+          }
+        ]
+      },
+      "Partner": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "CreateConnectorSettings": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ConnectorSettings"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false
+          }
+        ]
+      },
+      "StartAuth": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RfidTagCreate"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "externalTransactionId": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          }
+        ]
+      },
+      "ConnectorScheduleOverrideStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "connectorId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isOverridden": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Schedule": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "chargePointId": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "startHours": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "startMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "endHours": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "endMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "timeZone": {
+            "type": "string",
+            "nullable": true
+          },
+          "monday": {
+            "type": "boolean"
+          },
+          "tuesday": {
+            "type": "boolean"
+          },
+          "wednesday": {
+            "type": "boolean"
+          },
+          "thursday": {
+            "type": "boolean"
+          },
+          "friday": {
+            "type": "boolean"
+          },
+          "saturday": {
+            "type": "boolean"
+          },
+          "sunday": {
+            "type": "boolean"
+          },
+          "connectorIdList": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "Organisation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "MeterValues": {
+        "title": "MeterValues",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "meterValueList": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/MeterValues/definitions/MeterValue"
+            }
+          }
+        },
+        "definitions": {
+          "MeterValue": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "chargePointId": {
+                "type": "string",
+                "nullable": true
+              },
+              "connectorId": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "totalConsumptionKwh": {
+                "type": "number",
+                "format": "float"
+              },
+              "measurements": {
+                "type": "array",
+                "nullable": true,
+                "items": {
+                  "$ref": "#/components/schemas/MeterValues/definitions/Measurement"
+                }
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "Measurement": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "phase": {
+                "$ref": "#/components/schemas/MeterValues/definitions/Phase"
+              },
+              "current": {
+                "type": "number",
+                "format": "float"
+              },
+              "voltage": {
+                "type": "number",
+                "format": "float"
+              }
+            }
+          },
+          "Phase": {
+            "type": "string",
+            "description": "",
+            "x-enumNames": [
+              "L1",
+              "L2",
+              "L3"
+            ],
+            "enum": [
+              "L1",
+              "L2",
+              "L3"
+            ]
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "JWT": {
+        "type": "apiKey",
+        "description": "Type into the text box: Bearer {your JWT token}.",
+        "name": "Authorization",
+        "in": "header"
+      }
+    }
+  },
+  "security": [
+    {
+      "JWT": []
+    }
+  ]
+}

@@ -8,7 +8,7 @@ from urllib.parse import urljoin
 
 import jwt
 from aiohttp import ClientResponse, ClientSession
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 API_BASE_URL = "https://eapi.charge.space"
@@ -41,6 +41,8 @@ class ChargePoint(ChargeAmpsBaseModel):
     is_loadbalanced: bool
     firmware_version: str | None = None
     hardware_version: str | None = None
+    owner_read_only: bool = False
+    ocpp_version: str | None = None
     connectors: list[ChargePointConnector]
 
 
@@ -56,18 +58,12 @@ class ChargePointConnectorStatus(ChargeAmpsBaseModel):
     charge_point_id: str
     connector_id: int
     total_consumption_kwh: float
+    charging_power_kw: float | None = None
     status: str
     measurements: list[ChargePointMeasurement] | None = None
     start_time: datetime | None = None
     end_time: datetime | None = None
-    session_id: str | None = None
-
-    @field_validator("session_id", mode="before")
-    @classmethod
-    def coerce_session_id(cls, v: object) -> str | None:
-        if v is None:
-            return None
-        return str(v)
+    session_id: int | None = None
 
 
 class ChargePointStatus(ChargeAmpsBaseModel):
@@ -82,6 +78,8 @@ class ChargePointSettings(ChargeAmpsBaseModel):
     id: str
     dimmer: str
     down_light: bool | None = None
+    max_current: float | None = None
+    installation_current: int | None = None
 
 
 class ChargePointConnectorSettings(ChargeAmpsBaseModel):
@@ -92,11 +90,12 @@ class ChargePointConnectorSettings(ChargeAmpsBaseModel):
     rfid_lock: bool
     cable_lock: bool
     max_current: float | None = None
+    installation_current: int | None = None
 
 
 class ChargingSession(ChargeAmpsBaseModel):
     """Charging session model."""
-    id: str
+    id: int
     charge_point_id: str
     connector_id: int
     session_type: str
@@ -110,7 +109,7 @@ class StartAuth(ChargeAmpsBaseModel):
     rfid_length: int
     rfid_format: str
     rfid: str
-    external_transaction_id: str
+    external_transaction_id: str | None = None
 
 
 class ChargeAmpsClient:
@@ -165,7 +164,7 @@ class ChargeAmpsClient:
                 try:
                     self._logger.info("Found refresh token, try refresh")
                     response = await self._session.post(
-                        urljoin(self._base_url, f"/api/{API_VERSION}/auth/refreshToken"),
+                        urljoin(self._base_url, f"/api/{API_VERSION}/auth/refreshtoken"),
                         ssl=self._ssl,
                         headers={"apiKey": self._api_key},
                         json={"token": self._token, "refreshToken": self._refresh_token},
