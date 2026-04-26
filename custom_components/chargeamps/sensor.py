@@ -108,9 +108,7 @@ CHARGEPOINT_SENSORS: tuple[ChargeampsSensorEntityDescription, ...] = (
 )
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
-) -> None:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Setup sensor platform."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     entities = []
@@ -121,9 +119,7 @@ async def async_setup_entry(
 
         for connector in cp.connectors:
             for description in CONNECTOR_SENSORS:
-                entities.append(
-                    ChargeampsConnectorSensor(coordinator, cp_id, connector.connector_id, description)
-                )
+                entities.append(ChargeampsConnectorSensor(coordinator, cp_id, connector.connector_id, description))
 
     async_add_entities(entities)
 

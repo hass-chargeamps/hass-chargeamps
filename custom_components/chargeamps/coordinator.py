@@ -51,9 +51,7 @@ class ChargeAmpsDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             all_chargepoints = await self.client.get_chargepoints()
             chargepoints = (
-                [cp for cp in all_chargepoints if cp.id in self._chargepoint_ids]
-                if self._chargepoint_ids
-                else all_chargepoints
+                [cp for cp in all_chargepoints if cp.id in self._chargepoint_ids] if self._chargepoint_ids else all_chargepoints
             )
             data: dict[str, Any] = {
                 "chargepoints": {cp.id: cp for cp in chargepoints},
@@ -67,16 +65,15 @@ class ChargeAmpsDataUpdateCoordinator(DataUpdateCoordinator):
                 """Fetch all data for a single charge point in parallel."""
                 status_task = self.client.get_chargepoint_status(cp.id)
                 settings_task = self.client.get_chargepoint_settings(cp.id)
-                
+
                 status, settings = await asyncio.gather(status_task, settings_task)
-                
+
                 data["status"][cp.id] = status
                 data["settings"][cp.id] = settings
-                
+
                 # Fetch connector settings in parallel
                 conn_settings_tasks = [
-                    self.client.get_chargepoint_connector_settings(cp.id, conn.connector_id)
-                    for conn in cp.connectors
+                    self.client.get_chargepoint_connector_settings(cp.id, conn.connector_id) for conn in cp.connectors
                 ]
                 conn_settings_results = await asyncio.gather(*conn_settings_tasks)
                 for i, conn in enumerate(cp.connectors):

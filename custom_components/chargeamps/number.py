@@ -37,9 +37,7 @@ NUMBERS: tuple[ChargeampsNumberEntityDescription, ...] = (
 )
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
-) -> None:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Setup number platform."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     entities = []
@@ -47,9 +45,7 @@ async def async_setup_entry(
     for cp_id, cp in coordinator.data["chargepoints"].items():
         for connector in cp.connectors:
             for description in NUMBERS:
-                entities.append(
-                    ChargeampsNumber(coordinator, cp_id, connector.connector_id, description)
-                )
+                entities.append(ChargeampsNumber(coordinator, cp_id, connector.connector_id, description))
 
     async_add_entities(entities)
 
@@ -68,16 +64,12 @@ class ChargeampsNumber(ChargeAmpsEntity, NumberEntity):
     @property
     def native_value(self) -> float:
         """Return the current maximum current setting."""
-        settings = self.coordinator.data["connector_settings"].get(
-            (self.charge_point_id, self.connector_id)
-        )
+        settings = self.coordinator.data["connector_settings"].get((self.charge_point_id, self.connector_id))
         return float(settings.max_current) if settings and settings.max_current else 6.0
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the maximum current."""
-        settings = self.coordinator.data["connector_settings"].get(
-            (self.charge_point_id, self.connector_id)
-        )
+        settings = self.coordinator.data["connector_settings"].get((self.charge_point_id, self.connector_id))
         if settings:
             settings.max_current = value
             await self.coordinator.client.set_chargepoint_connector_settings(settings)

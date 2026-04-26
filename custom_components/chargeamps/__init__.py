@@ -51,11 +51,7 @@ async def async_setup(hass: HomeAssistant, config: dict):
 
     # Legacy YAML support - migrate to config flow
     conf = config[DOMAIN]
-    hass.async_create_task(
-        hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_IMPORT}, data=conf
-        )
-    )
+    hass.async_create_task(hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_IMPORT}, data=conf))
 
     return True
 
@@ -104,9 +100,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # Generate webhook secret on first setup and notify the user
     if CONF_WEBHOOK_SECRET not in entry.data:
         secret = secrets.token_hex(32)
-        hass.config_entries.async_update_entry(
-            entry, data={**entry.data, CONF_WEBHOOK_SECRET: secret}
-        )
+        hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_WEBHOOK_SECRET: secret})
         notify_create(
             hass,
             (
@@ -151,7 +145,7 @@ def setup_services(hass: HomeAssistant) -> None:
         cp_id = call.data["chargepoint"]
         conn_id = call.data["connector"]
         max_curr = call.data["max_current"]
-        
+
         if coordinator := await get_coordinator(cp_id):
             settings = coordinator.data["connector_settings"].get((cp_id, conn_id))
             if settings:
@@ -166,7 +160,7 @@ def setup_services(hass: HomeAssistant) -> None:
         cp_id = call.data["chargepoint"]
         dimmer = call.data.get("dimmer")
         downlight = call.data.get("downlight")
-        
+
         if coordinator := await get_coordinator(cp_id):
             settings = coordinator.data["settings"].get(cp_id)
             if settings:
@@ -331,15 +325,17 @@ class ChargeAmpsCallbackView(HomeAssistantView):
                 if not status:
                     continue
                 new_statuses = [
-                    cs.model_copy(update={
-                        "total_consumption_kwh": total_kwh or cs.total_consumption_kwh,
-                        "measurements": mv.get("measurements") or cs.measurements,
-                    }) if cs.connector_id == conn_id else cs
+                    cs.model_copy(
+                        update={
+                            "total_consumption_kwh": total_kwh or cs.total_consumption_kwh,
+                            "measurements": mv.get("measurements") or cs.measurements,
+                        }
+                    )
+                    if cs.connector_id == conn_id
+                    else cs
                     for cs in status.connector_statuses
                 ]
-                coordinator.data["status"][chargepoint_id] = status.model_copy(
-                    update={"connector_statuses": new_statuses}
-                )
+                coordinator.data["status"][chargepoint_id] = status.model_copy(update={"connector_statuses": new_statuses})
             coordinator.async_set_updated_data(coordinator.data)
 
         return Response(status=200)
@@ -352,9 +348,7 @@ class ChargeAmpsConnectorCallbackView(HomeAssistantView):
     name = "api:chargeamps:connector_callback"
     requires_auth = False
 
-    async def post(
-        self, request, entry_id: str, chargepoint_id: str, connector_id: str, event: str
-    ):
+    async def post(self, request, entry_id: str, chargepoint_id: str, connector_id: str, event: str):
         """Handle connector event callback POST request."""
         hass = request.app["hass"]
         entry = hass.config_entries.async_get_entry(entry_id)
@@ -367,7 +361,9 @@ class ChargeAmpsConnectorCallbackView(HomeAssistantView):
 
         _LOGGER.debug(
             "Charge Amps callback: event=%s chargepoint=%s connector=%s",
-            event, chargepoint_id, connector_id,
+            event,
+            chargepoint_id,
+            connector_id,
         )
 
         # Trigger a full refresh so the new session data is fetched from the API

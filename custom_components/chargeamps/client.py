@@ -27,6 +27,7 @@ class ChargeAmpsBaseModel(BaseModel):
 
 class ChargePointConnector(ChargeAmpsBaseModel):
     """Charge point connector model."""
+
     charge_point_id: str
     connector_id: int
     type: str
@@ -34,6 +35,7 @@ class ChargePointConnector(ChargeAmpsBaseModel):
 
 class ChargePoint(ChargeAmpsBaseModel):
     """Charge point model."""
+
     id: str
     name: str
     password: str
@@ -48,6 +50,7 @@ class ChargePoint(ChargeAmpsBaseModel):
 
 class ChargePointMeasurement(ChargeAmpsBaseModel):
     """Charge point measurement model."""
+
     phase: str
     current: float | None = None
     voltage: float | None = None
@@ -55,6 +58,7 @@ class ChargePointMeasurement(ChargeAmpsBaseModel):
 
 class ChargePointConnectorStatus(ChargeAmpsBaseModel):
     """Charge point connector status model."""
+
     charge_point_id: str
     connector_id: int
     total_consumption_kwh: float
@@ -68,6 +72,7 @@ class ChargePointConnectorStatus(ChargeAmpsBaseModel):
 
 class ChargePointStatus(ChargeAmpsBaseModel):
     """Charge point status model."""
+
     id: str
     status: str
     connector_statuses: list[ChargePointConnectorStatus]
@@ -75,6 +80,7 @@ class ChargePointStatus(ChargeAmpsBaseModel):
 
 class ChargePointSettings(ChargeAmpsBaseModel):
     """Charge point settings model."""
+
     id: str
     dimmer: str
     down_light: bool | None = None
@@ -84,6 +90,7 @@ class ChargePointSettings(ChargeAmpsBaseModel):
 
 class ChargePointConnectorSettings(ChargeAmpsBaseModel):
     """Charge point connector settings model."""
+
     charge_point_id: str
     connector_id: int
     mode: str
@@ -95,6 +102,7 @@ class ChargePointConnectorSettings(ChargeAmpsBaseModel):
 
 class ChargingSession(ChargeAmpsBaseModel):
     """Charging session model."""
+
     id: int
     charge_point_id: str
     connector_id: int
@@ -106,6 +114,7 @@ class ChargingSession(ChargeAmpsBaseModel):
 
 class StartAuth(ChargeAmpsBaseModel):
     """Start auth model."""
+
     rfid_length: int
     rfid_format: str
     rfid: str
@@ -141,9 +150,7 @@ class ChargeAmpsClient:
         """Handle response and log errors."""
         if response.status >= 400:
             error_text = await response.text()
-            self._logger.error(
-                "API Error %d: %s for %s", response.status, error_text, response.url
-            )
+            self._logger.error("API Error %d: %s for %s", response.status, error_text, response.url)
             response.raise_for_status()
         return response
 

@@ -32,9 +32,7 @@ BUTTONS: tuple[ChargeampsButtonEntityDescription, ...] = (
 )
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
-) -> None:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Setup button platform."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     entities = []

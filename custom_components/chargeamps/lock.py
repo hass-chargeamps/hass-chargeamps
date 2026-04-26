@@ -32,9 +32,7 @@ LOCKS: tuple[ChargeampsLockEntityDescription, ...] = (
 )
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
-) -> None:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Setup lock platform."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     entities = []
@@ -42,9 +40,7 @@ async def async_setup_entry(
     for cp_id, cp in coordinator.data["chargepoints"].items():
         for connector in cp.connectors:
             for description in LOCKS:
-                entities.append(
-                    ChargeampsCableLock(coordinator, cp_id, connector.connector_id, description)
-                )
+                entities.append(ChargeampsCableLock(coordinator, cp_id, connector.connector_id, description))
 
     async_add_entities(entities)
 
@@ -63,16 +59,12 @@ class ChargeampsCableLock(ChargeAmpsEntity, LockEntity):
     @property
     def is_locked(self) -> bool:
         """Return true if the cable is locked."""
-        settings = self.coordinator.data["connector_settings"].get(
-            (self.charge_point_id, self.connector_id)
-        )
+        settings = self.coordinator.data["connector_settings"].get((self.charge_point_id, self.connector_id))
         return settings.cable_lock if settings else False
 
     async def async_lock(self, **kwargs: Any) -> None:
         """Lock the cable."""
-        settings = self.coordinator.data["connector_settings"].get(
-            (self.charge_point_id, self.connector_id)
-        )
+        settings = self.coordinator.data["connector_settings"].get((self.charge_point_id, self.connector_id))
         if settings:
             settings.cable_lock = True
             await self.coordinator.client.set_chargepoint_connector_settings(settings)
@@ -80,9 +72,7 @@ class ChargeampsCableLock(ChargeAmpsEntity, LockEntity):
 
     async def async_unlock(self, **kwargs: Any) -> None:
         """Unlock the cable."""
-        settings = self.coordinator.data["connector_settings"].get(
-            (self.charge_point_id, self.connector_id)
-        )
+        settings = self.coordinator.data["connector_settings"].get((self.charge_point_id, self.connector_id))
         if settings:
             settings.cable_lock = False
             await self.coordinator.client.set_chargepoint_connector_settings(settings)
