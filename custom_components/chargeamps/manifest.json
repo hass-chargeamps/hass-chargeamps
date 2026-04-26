@@ -1,12 +1,17 @@
 {
   "domain": "chargeamps",
   "name": "Chargeamps",
-  "codeowners": ["@kirei"],
+  "codeowners": [
+    "@hass-chargeamps"
+  ],
   "config_flow": false,
   "dependencies": [],
-  "documentation": "https://github.com/kirei/hass-chargeamps",
+  "documentation": "https://github.com/hass-chargeamps/hass-chargeamps",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/kirei/hass-chargeamps/issues",
-  "requirements": ["homeassistant>=2024.1.0", "dataclasses-json>=0.5.2"],
+  "issue_tracker": "https://github.com/hass-chargeamps/hass-chargeamps/issues",
+  "requirements": [
+    "homeassistant>=2024.1.0",
+    "dataclasses-json>=0.5.2"
+  ],
   "version": "1.12.1"
 }

@@ -2,7 +2,7 @@
 Component to integrate with Chargeamps.
 
 For more details about this component, please refer to
-https://github.com/kirei/hass-chargeamps
+https://github.com/hass-chargeamps/hass-chargeamps
 """
 
 import logging

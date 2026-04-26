@@ -4,7 +4,7 @@ This repository contains a [Charge Amps](https://www.chargeamps.com/) component 
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 
-The module is developed by [Kirei AB](https://www.kirei.se) and is not supported by [Charge Amps AB](https://chargeamps.com).
+The module was originally developed by [Kirei AB](https://www.kirei.se) and is not supported by [Charge Amps AB](https://chargeamps.com).
 
 ## Installation
 
