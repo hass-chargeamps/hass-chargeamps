@@ -84,11 +84,22 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_import(self, import_data: dict[str, Any]) -> FlowResult:
-        """Import a config entry from YAML."""
+        """Import a config entry from YAML without API validation."""
         if "username" in import_data and CONF_EMAIL not in import_data:
             import_data[CONF_EMAIL] = import_data.pop("username")
 
-        return await self.async_step_user(import_data)
+        await self.async_set_unique_id(import_data[CONF_EMAIL].lower())
+        self._abort_if_unique_id_configured()
+
+        options = {}
+        if CONF_SCAN_INTERVAL in import_data:
+            options[CONF_SCAN_INTERVAL] = import_data.pop(CONF_SCAN_INTERVAL)
+
+        clean_data = {
+            k: v for k, v in import_data.items()
+            if k in (CONF_EMAIL, CONF_PASSWORD, CONF_API_KEY, CONF_URL)
+        }
+        return self.async_create_entry(title=clean_data[CONF_EMAIL], data=clean_data, options=options)
 
     async def async_step_reauth(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle re-authentication."""

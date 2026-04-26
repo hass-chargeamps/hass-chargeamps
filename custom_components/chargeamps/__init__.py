@@ -7,7 +7,7 @@ from typing import Optional
 
 from aiohttp.web import Response
 from homeassistant.components.http import HomeAssistantView
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import (
     CONF_API_KEY,
     CONF_EMAIL,
@@ -53,7 +53,7 @@ async def async_setup(hass: HomeAssistant, config: dict):
     conf = config[DOMAIN]
     hass.async_create_task(
         hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": "import"}, data=conf
+            DOMAIN, context={"source": SOURCE_IMPORT}, data=conf
         )
     )
 

@@ -1,6 +1,10 @@
 {
   "config": {
     "step": {
+      "import": {
+        "title": "Imported from YAML",
+        "description": "Your Chargeamps configuration has been imported from configuration.yaml. You can now remove the chargeamps section from your YAML file."
+      },
       "user": {
         "data": {
           "email": "Email",
