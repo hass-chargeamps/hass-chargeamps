@@ -1,0 +1,124 @@
+{
+  "config": {
+    "step": {
+      "import": {
+        "title": "Imported from YAML",
+        "description": "Your Chargeamps configuration has been imported from configuration.yaml. You can now remove the chargeamps section from your YAML file."
+      },
+      "user": {
+        "data": {
+          "email": "Email",
+          "password": "Password",
+          "api_key": "API Key",
+          "url": "API Base URL (optional)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Chargeamps",
+        "description": "Your credentials are no longer valid. Please update them below.",
+        "data": {
+          "email": "Email",
+          "password": "Password",
+          "api_key": "API Key",
+          "url": "API Base URL (optional)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "Device is already configured",
+      "reauth_successful": "Re-authentication was successful"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "scan_interval": "Scan interval (seconds)",
+          "chargepoints": "Limit to specific charge points (leave empty for all)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "{connector} Status",
+        "state": {
+          "available": "Available",
+          "preparing": "Preparing",
+          "charging": "Charging",
+          "suspended_evse": "Suspended EVSE",
+          "suspended_ev": "Suspended EV",
+          "finishing": "Finishing",
+          "reserved": "Reserved",
+          "unavailable": "Unavailable",
+          "faulted": "Faulted",
+          "connected": "Connected",
+          "error": "Error"
+        }
+      },
+      "power": {
+        "name": "{connector} Power"
+      },
+      "total_energy": {
+        "name": "Total energy"
+      },
+      "l1_current": {
+        "name": "{connector} L1 current"
+      },
+      "l2_current": {
+        "name": "{connector} L2 current"
+      },
+      "l3_current": {
+        "name": "{connector} L3 current"
+      },
+      "l1_voltage": {
+        "name": "{connector} L1 voltage"
+      },
+      "l2_voltage": {
+        "name": "{connector} L2 voltage"
+      },
+      "l3_voltage": {
+        "name": "{connector} L3 voltage"
+      }
+    },
+    "binary_sensor": {
+      "cable_connected": {
+        "name": "{connector} Cable connected"
+      }
+    },
+    "switch": {
+      "enable": {
+        "name": "{connector}"
+      }
+    },
+    "lock": {
+      "cable_lock": {
+        "name": "{connector} Cable lock"
+      }
+    },
+    "number": {
+      "max_current": {
+        "name": "{connector} Max current"
+      }
+    },
+    "button": {
+      "reboot": {
+        "name": "Reboot"
+      }
+    },
+    "light": {
+      "dimmer": {
+        "name": "Dimmer"
+      },
+      "downlight": {
+        "name": "Downlight"
+      }
+    }
+  }
+}

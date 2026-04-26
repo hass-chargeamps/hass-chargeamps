@@ -1,10 +1,5 @@
 {
 	"name": "Chargeamps",
-	"domains": [
-		"sensor",
-		"light",
-		"switch"
-	],
-	"iot_class": "cloud_polling",
-	"render_readme": true
+	"render_readme": true,
+	"homeassistant": "2024.1.0"
 }

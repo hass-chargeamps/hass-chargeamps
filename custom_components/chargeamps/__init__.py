@@ -1,427 +1,436 @@
-"""
-Component to integrate with Chargeamps.
-
-For more details about this component, please refer to
-https://github.com/hass-chargeamps/hass-chargeamps
-"""
+"""Component to integrate with Chargeamps."""
 
 import logging
-from datetime import datetime, timedelta
+import secrets
+from datetime import timedelta
 from typing import Optional
 
-import homeassistant.helpers.config_validation as cv
-import voluptuous as vol
+from aiohttp.web import Response
+from homeassistant.components.http import HomeAssistantView
+from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import (
     CONF_API_KEY,
+    CONF_EMAIL,
     CONF_PASSWORD,
     CONF_SCAN_INTERVAL,
     CONF_URL,
-    CONF_USERNAME,
 )
-from homeassistant.helpers import discovery
-from homeassistant.helpers.entity import DeviceInfo, Entity
-from homeassistant.util import Throttle
+from homeassistant.components.persistent_notification import async_create as notify_create
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.network import NoURLAvailableError, get_url
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .client import (
     ChargeAmpsClient,
-    ChargePoint,
-    ChargePointConnector,
-    ChargePointConnectorSettings,
-    ChargePointConnectorStatus,
+    ChargePointMeasurement,
     ChargePointStatus,
     StartAuth,
 )
 from .const import (
     CONF_CHARGEPOINTS,
-    CONF_READONLY,
+    CONF_WEBHOOK_SECRET,
     CONFIGURATION_URL,
-    DEFAULT_ICON,
-    DIMMER_VALUES,
+    DEFAULT_SCAN_INTERVAL,
     DOMAIN,
-    DOMAIN_DATA,
-    ICON_MAP,
     MANUFACTURER,
     PLATFORMS,
+    WEBHOOK_AUTH_HEADER,
 )
+from .coordinator import ChargeAmpsDataUpdateCoordinator
+
+_VIEWS_REGISTERED = "_views_registered"
 
 _LOGGER = logging.getLogger(__name__)
 
-DEFAULT_SCAN_INTERVAL = timedelta(seconds=30)
-MIN_SCAN_INTERVAL = timedelta(seconds=10)
 
-CONFIG_SCHEMA = vol.Schema(
-    {
-        DOMAIN: vol.Schema(
-            {
-                vol.Required(CONF_USERNAME): cv.string,
-                vol.Required(CONF_PASSWORD): cv.string,
-                vol.Required(CONF_API_KEY): cv.string,
-                vol.Optional(CONF_URL): cv.url,
-                vol.Optional(CONF_READONLY): cv.boolean,
-                vol.Optional(CONF_CHARGEPOINTS): vol.All(cv.ensure_list, [cv.string]),
-                vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): (
-                    vol.All(cv.time_period, vol.Clamp(min=MIN_SCAN_INTERVAL))
-                ),
-            }
-        )
-    },
-    extra=vol.ALLOW_EXTRA,
-)
-
-_SERVICE_MAP = {
-    "set_light": "async_set_light",
-    "set_max_current": "async_set_max_current",
-    "enable": "async_enable_ev",
-    "disable": "async_disable_ev",
-    "cable_lock": "async_cable_lock",
-    "cable_unlock": "async_cable_unlock",
-    "remote_start": "async_remote_start",
-    "remote_stop": "async_remote_stop",
-}
-
-
-async def async_setup(hass, config):
+async def async_setup(hass: HomeAssistant, config: dict):
     """Set up this component using YAML."""
-    if config.get(DOMAIN) is None:
-        # We get here if the integration is set up using config flow
+    if DOMAIN not in config:
         return True
 
-    # Create DATA dict
-    hass.data[DOMAIN_DATA] = {}
-
-    # Get "global" configuration.
-    username = config[DOMAIN].get(CONF_USERNAME)
-    password = config[DOMAIN].get(CONF_PASSWORD)
-    api_key = config[DOMAIN].get(CONF_API_KEY)
-    api_base_url = config[DOMAIN].get(CONF_URL)
-    charge_point_ids = config[DOMAIN].get(CONF_CHARGEPOINTS)
-    readonly = config[DOMAIN].get(CONF_READONLY, False)
-    scan_interval = config[DOMAIN].get(CONF_SCAN_INTERVAL)
-
-    # Configure the client.
-    client = ChargeAmpsClient(email=username, password=password, api_key=api_key, api_base_url=api_base_url)
-
-    # check all configured chargepoints or discover
-    if charge_point_ids is not None:
-        for cp_id in charge_point_ids:
-            try:
-                await client.get_chargepoint_status(cp_id)
-                _LOGGER.info("Adding chargepoint %s", cp_id)
-            except Exception:
-                _LOGGER.error("Error adding chargepoint %s", cp_id)
-        if len(charge_point_ids) == 0:
-            _LOGGER.error("No chargepoints found")
-            return False
-    else:
-        charge_point_ids = []
-        for cp in await client.get_chargepoints():
-            _LOGGER.info("Discovered chargepoint %s", cp.id)
-            charge_point_ids.append(cp.id)
-
-    handler = ChargeampsHandler(hass, client, charge_point_ids, readonly, scan_interval)
-    hass.data[DOMAIN_DATA]["handler"] = handler
-    hass.data[DOMAIN_DATA]["chargepoint_info"] = {}
-    hass.data[DOMAIN_DATA]["chargepoint_status"] = {}
-    hass.data[DOMAIN_DATA]["chargepoint_settings"] = {}
-    hass.data[DOMAIN_DATA]["connector_info"] = {}
-    hass.data[DOMAIN_DATA]["connector_status"] = {}
-    hass.data[DOMAIN_DATA]["connector_settings"] = {}
-    hass.data[DOMAIN_DATA]["chargepoint_total_energy"] = {}
-    await handler.update_info()
-    for cp_id in charge_point_ids:
-        await handler.force_update_data(cp_id)
-
-    # Register services to hass
-    async def execute_service(call):
-        function_name = _SERVICE_MAP[call.service]
-        function_call = getattr(handler, function_name)
-        await function_call(call.data)
-
-    for service in _SERVICE_MAP:
-        hass.services.async_register(DOMAIN, service, execute_service)
-
-    # Load platforms
-    for domain in PLATFORMS:
-        hass.async_create_task(discovery.async_load_platform(hass, domain, DOMAIN, {}, config))
+    # Legacy YAML support - migrate to config flow
+    conf = config[DOMAIN]
+    hass.async_create_task(hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_IMPORT}, data=conf))
 
     return True
 
 
-class ChargeampsHandler:
-    """This class handle communication and stores the data."""
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+    """Set up this component from a config entry."""
+    client = ChargeAmpsClient(
+        email=entry.data[CONF_EMAIL],
+        password=entry.data[CONF_PASSWORD],
+        api_key=entry.data[CONF_API_KEY],
+        session=async_get_clientsession(hass),
+        api_base_url=entry.data.get(CONF_URL),
+    )
 
-    def __init__(self, hass, client, charge_point_ids, readonly, scan_interval):
-        """Initialize the class."""
-        self.hass = hass
-        self.client = client
-        self.charge_point_ids = charge_point_ids
-        self.default_charge_point_id = charge_point_ids[0]
-        self.default_connector_id = 1
-        self.readonly = readonly
-        self.scan_interval = scan_interval
-        self.last_scanned = {id: datetime.fromtimestamp(0) for id in charge_point_ids}
-        if self.readonly:
-            _LOGGER.warning("Running in read-only mode, chargepoint will never be updated")
-        _LOGGER.debug("Scan interval %s", self.scan_interval)
-        self.update_info = Throttle(self.scan_interval)(self.update_info)
+    scan_interval_seconds = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL.total_seconds())
+    scan_interval = timedelta(seconds=scan_interval_seconds)
+    chargepoint_ids = entry.options.get(CONF_CHARGEPOINTS) or None
 
-    async def get_chargepoint_statuses(self):
-        res = []
-        for cp_id in self.charge_point_ids:
-            res.append(await self.client.get_chargepoint_status(cp_id))
-        return res
+    coordinator = ChargeAmpsDataUpdateCoordinator(hass, client, scan_interval, chargepoint_ids)
+    await coordinator.async_config_entry_first_refresh()
 
-    def get_chargepoint_total_energy(self, charge_point_id) -> float:
-        return self.hass.data[DOMAIN_DATA]["chargepoint_total_energy"].get(charge_point_id)
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    def get_chargepoint_info(self, charge_point_id) -> ChargePoint:
-        return self.hass.data[DOMAIN_DATA]["chargepoint_info"].get(charge_point_id)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    def get_chargepoint_status(self, charge_point_id) -> ChargePointStatus:
-        return self.hass.data[DOMAIN_DATA]["chargepoint_status"].get(charge_point_id)
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
-    def get_chargepoint_settings(self, charge_point_id):
-        return self.hass.data[DOMAIN_DATA]["chargepoint_settings"].get(charge_point_id)
+    # Register services once
+    setup_services(hass)
 
-    def get_connector_info(self, charge_point_id, connector_id) -> ChargePointConnector:
-        key = (charge_point_id, connector_id)
-        return self.hass.data[DOMAIN_DATA]["connector_info"].get(key)
+    # Register HTTP views once — they route by entry_id internally
+    if not hass.data[DOMAIN].get(_VIEWS_REGISTERED):
+        hass.http.register_view(ChargeAmpsHealthView())
+        hass.http.register_view(ChargeAmpsCallbackView())
+        hass.http.register_view(ChargeAmpsConnectorCallbackView())
+        hass.data[DOMAIN][_VIEWS_REGISTERED] = True
 
-    async def set_chargepoint_lights(self, charge_point_id, dimmer, downlight):
-        settings = await self.client.get_chargepoint_settings(charge_point_id)
-        if dimmer is not None:
-            settings.dimmer = dimmer.capitalize()
-        if downlight is not None:
-            settings.down_light = downlight
-        if self.readonly:
-            _LOGGER.info("NOT setting chargepoint: %s", settings)
-        else:
-            _LOGGER.info("Setting chargepoint: %s", settings)
-            await self.client.set_chargepoint_settings(settings)
-        await self.force_update_data(charge_point_id)
+    try:
+        base_url = get_url(hass, prefer_external=True)
+    except NoURLAvailableError:
+        base_url = "<your-ha-external-url>"
 
-    def get_connector_status(self, charge_point_id, connector_id) -> Optional[ChargePointConnectorStatus]:
-        key = (charge_point_id, connector_id)
-        return self.hass.data[DOMAIN_DATA]["connector_status"].get(key)
+    webhook_base = f"{base_url}/api/chargeamps/{entry.entry_id}"
 
-    def get_connector_settings(self, charge_point_id, connector_id) -> Optional[ChargePointConnectorSettings]:
-        key = (charge_point_id, connector_id)
-        return self.hass.data[DOMAIN_DATA]["connector_settings"].get(key)
-
-    def get_connector_measurements(self, charge_point_id, connector_id):
-        connector_status = self.get_connector_status(charge_point_id, connector_id)
-        if connector_status:
-            return connector_status.measurements
-        return None
-
-    async def set_connector_mode(self, charge_point_id, connector_id, mode):
-        settings = await self.client.get_chargepoint_connector_settings(charge_point_id, connector_id)
-        settings.mode = mode
-        if self.readonly:
-            _LOGGER.info("NOT setting chargepoint connector: %s", settings)
-        else:
-            _LOGGER.info("Setting chargepoint connector: %s", settings)
-            await self.client.set_chargepoint_connector_settings(settings)
-        await self.force_update_data(charge_point_id)
-
-    async def set_connector_max_current(self, charge_point_id, connector_id, max_current):
-        settings = await self.client.get_chargepoint_connector_settings(charge_point_id, connector_id)
-        settings.max_current = max_current
-        if self.readonly:
-            _LOGGER.info("NOT setting chargepoint connector: %s", settings)
-        else:
-            _LOGGER.info("Setting chargepoint connector: %s", settings)
-            await self.client.set_chargepoint_connector_settings(settings)
-        await self.force_update_data(charge_point_id)
-
-    async def set_connector_cable_lock(self, charge_point_id, connector_id, cable_lock):
-        settings = await self.client.get_chargepoint_connector_settings(charge_point_id, connector_id)
-        settings.cable_lock = cable_lock
-        if self.readonly:
-            _LOGGER.info("NOT setting chargepoint connector: %s", settings)
-        else:
-            _LOGGER.info("Setting chargepoint connector: %s", settings)
-            await self.client.set_chargepoint_connector_settings(settings)
-        await self.force_update_data(charge_point_id)
-
-    async def update_info(self):
-        for cp in await self.client.get_chargepoints():
-            if cp.id in self.charge_point_ids:
-                _LOGGER.debug("CHARGEPOINT INFO = %s", cp)
-                self.hass.data[DOMAIN_DATA]["chargepoint_info"][cp.id] = cp
-                for c in cp.connectors:
-                    key = (c.charge_point_id, c.connector_id)
-                    self.hass.data[DOMAIN_DATA]["connector_info"][key] = c
-                _LOGGER.debug("CONNECTOR INFO = %s", c)
-                _LOGGER.info("Update info for chargepoint %s", cp.id)
-
-    async def update_data(self, charge_point_id):
-        _LOGGER.debug("Update data for chargepoint %s", charge_point_id)
-        await self._update_data(charge_point_id)
-
-    async def force_update_data(self, charge_point_id):
-        _LOGGER.debug("Force update data for chargepoint %s", charge_point_id)
-        await self._update_data(charge_point_id, force=True)
-
-    async def _update_data(self, charge_point_id, force: bool = False):
-        """Update data."""
-        if not force and datetime.now() - self.last_scanned[charge_point_id] < self.scan_interval:
-            _LOGGER.debug("Update throttled, last scan at %s", self.last_scanned[charge_point_id])
-            return
-        else:
-            _LOGGER.debug("Update passed, forced=%s", force)
-            self.last_scanned[charge_point_id] = datetime.now()
-        try:
-            status = await self.client.get_chargepoint_status(charge_point_id)
-            _LOGGER.debug("STATUS = %s", status)
-            self.hass.data[DOMAIN_DATA]["chargepoint_status"][charge_point_id] = status
-            for connector_status in status.connector_statuses:
-                _LOGGER.debug(
-                    "Update data for chargepoint %s connector %d",
-                    charge_point_id,
-                    connector_status.connector_id,
-                )
-                key = (charge_point_id, connector_status.connector_id)
-                self.hass.data[DOMAIN_DATA]["connector_status"][key] = connector_status
-                connector_settings = await self.client.get_chargepoint_connector_settings(
-                    charge_point_id, connector_status.connector_id
-                )
-                self.hass.data[DOMAIN_DATA]["connector_settings"][key] = connector_settings
-            total_energy = sum([v.total_consumption_kwh for v in await self.client.get_all_chargingsessions(charge_point_id)])
-            _LOGGER.debug(
-                "Total consumption for chargepoint %s: %f",
-                charge_point_id,
-                total_energy,
-            )
-            self.hass.data[DOMAIN_DATA]["chargepoint_total_energy"][charge_point_id] = round(total_energy, 2)
-            settings = await self.client.get_chargepoint_settings(charge_point_id)
-            self.hass.data[DOMAIN_DATA]["chargepoint_settings"][charge_point_id] = settings
-        except Exception as error:  # pylint: disable=broad-except
-            _LOGGER.error("Could not update data - %s", error)
-
-    async def async_set_max_current(self, param):
-        """Set current maximum in async way."""
-        try:
-            max_current = param["max_current"]
-        except (KeyError, ValueError) as ex:
-            _LOGGER.warning("Current value is not correct. %s", ex)
-            return
-        charge_point_id = param.get("chargepoint", self.default_charge_point_id)
-        connector_id = param.get("connector", self.default_connector_id)
-        await self.set_connector_max_current(charge_point_id, connector_id, max_current)
-
-    async def async_set_light(self, param):
-        """Set charge point lights in async way."""
-        charge_point_id = param.get("chargepoint", self.default_charge_point_id)
-        dimmer = param.get("dimmer")
-        if dimmer is not None and dimmer not in DIMMER_VALUES:
-            _LOGGER.warning("Dimmer is not one of %s - got %s", DIMMER_VALUES, dimmer)
-            return
-        downlight = param.get("downlight")
-        if downlight is not None and not isinstance(downlight, bool):
-            _LOGGER.warning("Downlight must be true or false - got %s", downlight)
-            return
-        await self.set_chargepoint_lights(charge_point_id, dimmer, downlight)
-
-    async def async_enable_ev(self, param):
-        """Enable EV in async way."""
-        charge_point_id = param.get("chargepoint", self.default_charge_point_id)
-        connector_id = param.get("connector", self.default_connector_id)
-        await self.set_connector_mode(charge_point_id, connector_id, "On")
-
-    async def async_disable_ev(self, param=None):
-        """Disable EV in async way."""
-        charge_point_id = param.get("chargepoint", self.default_charge_point_id)
-        connector_id = param.get("connector", self.default_connector_id)
-        await self.set_connector_mode(charge_point_id, connector_id, "Off")
-
-    async def async_cable_lock(self, param):
-        """Lock cable in async way."""
-        charge_point_id = param.get("chargepoint", self.default_charge_point_id)
-        connector_id = param.get("connector", self.default_connector_id)
-        await self.set_connector_cable_lock(charge_point_id, connector_id, True)
-
-    async def async_cable_unlock(self, param=None):
-        """Unlock cable in async way."""
-        charge_point_id = param.get("chargepoint", self.default_charge_point_id)
-        connector_id = param.get("connector", self.default_connector_id)
-        await self.set_connector_cable_lock(charge_point_id, connector_id, False)
-
-    async def async_remote_start(self, param):
-        """Remote start RFID in async way."""
-
-        charge_point_id = param.get("chargepoint", self.default_charge_point_id)
-        connector_id = param.get("connector", self.default_connector_id)
-        rfid_length = param.get("rfid_length", 4)
-        rfid_format = param.get("rfid_format", "Dec")
-        rfid = param.get("rfid")
-        external_transaction_id = param.get("external_transaction_id", 0)
-
-        await self.client.remote_start(
-            charge_point_id,
-            connector_id,
-            StartAuth(rfid_length, rfid_format, rfid, external_transaction_id),
+    # Generate webhook secret on first setup and notify the user
+    if CONF_WEBHOOK_SECRET not in entry.data:
+        secret = secrets.token_hex(32)
+        hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_WEBHOOK_SECRET: secret})
+        notify_create(
+            hass,
+            (
+                f"## Charge Amps — Callback / Webhook Setup\n\n"
+                f"To enable real-time updates, contact **Charge Amps support** and "
+                f"provide the following details:\n\n"
+                f"| | |\n"
+                f"|---|---|\n"
+                f"| **Base URL** | `{webhook_base}` |\n"
+                f"| **Auth header key** | `{WEBHOOK_AUTH_HEADER}` |\n"
+                f"| **Auth header value** | `{secret}` |\n\n"
+                f"**Verify reachability first** — run this from a terminal outside your home network "
+                f"(or use a tool like [reqbin.com](https://reqbin.com)):\n\n"
+                f"```\nGET {webhook_base}\n{WEBHOOK_AUTH_HEADER}: {secret}\n```\n\n"
+                f"- `200 OK` → ready to hand to Charge Amps support\n"
+                f"- `401` → URL correct but secret wrong\n"
+                f"- `404` → URL unreachable or wrong\n\n"
+                f"You can dismiss this notification once you have noted the details. "
+                f"The information is also available under **integration diagnostics**."
+            ),
+            title="Charge Amps Webhook Credentials",
+            notification_id=f"{DOMAIN}_webhook_{entry.entry_id}",
         )
 
-    async def async_remote_stop(self, param):
-        """Remote stop RFID in async way."""
-        charge_point_id = param.get("chargepoint", self.default_charge_point_id)
-        connector_id = param.get("connector", self.default_connector_id)
-        await self.client.remote_stop(charge_point_id, connector_id)
+    return True
 
 
-class ChargeampsEntity(Entity):
+def setup_services(hass: HomeAssistant) -> None:
+    """Register services for Chargeamps."""
+    if hass.services.has_service(DOMAIN, "set_max_current"):
+        return
+
+    async def get_coordinator(chargepoint_id: str) -> Optional[ChargeAmpsDataUpdateCoordinator]:
+        """Find the coordinator matching a charge point ID."""
+        for value in hass.data[DOMAIN].values():
+            if not isinstance(value, ChargeAmpsDataUpdateCoordinator):
+                continue
+            if chargepoint_id in value.data["chargepoints"]:
+                return value
+        return None
+
+    async def async_set_max_current(call: ServiceCall):
+        """Set the maximum charging current for a connector."""
+        cp_id = call.data["chargepoint"]
+        conn_id = call.data["connector"]
+        max_curr = call.data["max_current"]
+
+        if coordinator := await get_coordinator(cp_id):
+            settings = coordinator.data["connector_settings"].get((cp_id, conn_id))
+            if settings:
+                settings.max_current = max_curr
+                await coordinator.client.set_chargepoint_connector_settings(settings)
+                await coordinator.async_request_refresh()
+        else:
+            _LOGGER.error("Chargepoint %s not found in any configured account", cp_id)
+
+    async def async_set_light(call: ServiceCall):
+        """Set the dimmer and/or downlight settings for a charge point."""
+        cp_id = call.data["chargepoint"]
+        dimmer = call.data.get("dimmer")
+        downlight = call.data.get("downlight")
+
+        if coordinator := await get_coordinator(cp_id):
+            settings = coordinator.data["settings"].get(cp_id)
+            if settings:
+                if dimmer:
+                    settings.dimmer = dimmer.capitalize()
+                if downlight is not None:
+                    settings.down_light = downlight
+                await coordinator.client.set_chargepoint_settings(settings)
+                await coordinator.async_request_refresh()
+
+    async def async_enable_ev(call: ServiceCall):
+        """Enable EV charging on a connector."""
+        cp_id = call.data["chargepoint"]
+        conn_id = call.data["connector"]
+        if coordinator := await get_coordinator(cp_id):
+            settings = coordinator.data["connector_settings"].get((cp_id, conn_id))
+            if settings:
+                settings.mode = "On"
+                await coordinator.client.set_chargepoint_connector_settings(settings)
+                await coordinator.async_request_refresh()
+
+    async def async_disable_ev(call: ServiceCall):
+        """Disable EV charging on a connector."""
+        cp_id = call.data["chargepoint"]
+        conn_id = call.data["connector"]
+        if coordinator := await get_coordinator(cp_id):
+            settings = coordinator.data["connector_settings"].get((cp_id, conn_id))
+            if settings:
+                settings.mode = "Off"
+                await coordinator.client.set_chargepoint_connector_settings(settings)
+                await coordinator.async_request_refresh()
+
+    async def async_cable_lock(call: ServiceCall):
+        """Lock the cable on a connector."""
+        cp_id = call.data["chargepoint"]
+        conn_id = call.data["connector"]
+        if coordinator := await get_coordinator(cp_id):
+            settings = coordinator.data["connector_settings"].get((cp_id, conn_id))
+            if settings:
+                settings.cable_lock = True
+                await coordinator.client.set_chargepoint_connector_settings(settings)
+                await coordinator.async_request_refresh()
+
+    async def async_cable_unlock(call: ServiceCall):
+        """Unlock the cable on a connector."""
+        cp_id = call.data["chargepoint"]
+        conn_id = call.data["connector"]
+        if coordinator := await get_coordinator(cp_id):
+            settings = coordinator.data["connector_settings"].get((cp_id, conn_id))
+            if settings:
+                settings.cable_lock = False
+                await coordinator.client.set_chargepoint_connector_settings(settings)
+                await coordinator.async_request_refresh()
+
+    async def async_remote_start(call: ServiceCall):
+        """Remotely start a charging session on a connector."""
+        cp_id = call.data["chargepoint"]
+        conn_id = call.data["connector"]
+        auth = StartAuth(
+            rfid_length=call.data.get("rfid_length", 4),
+            rfid_format=call.data.get("rfid_format", "Dec"),
+            rfid=call.data["rfid"],
+            external_transaction_id=call.data.get("external_transaction_id", "0"),
+        )
+        if coordinator := await get_coordinator(cp_id):
+            await coordinator.client.remote_start(cp_id, conn_id, auth)
+            await coordinator.async_request_refresh()
+
+    async def async_remote_stop(call: ServiceCall):
+        """Remotely stop a charging session on a connector."""
+        cp_id = call.data["chargepoint"]
+        conn_id = call.data["connector"]
+        if coordinator := await get_coordinator(cp_id):
+            await coordinator.client.remote_stop(cp_id, conn_id)
+            await coordinator.async_request_refresh()
+
+    services = {
+        "set_max_current": async_set_max_current,
+        "set_light": async_set_light,
+        "enable": async_enable_ev,
+        "disable": async_disable_ev,
+        "cable_lock": async_cable_lock,
+        "cable_unlock": async_cable_unlock,
+        "remote_start": async_remote_start,
+        "remote_stop": async_remote_stop,
+    }
+
+    for name, handler in services.items():
+        hass.services.async_register(DOMAIN, name, handler)
+
+
+def _get_coordinator_for_entry(hass: HomeAssistant, entry_id: str):
+    """Return the coordinator for a given entry_id, or None."""
+    return hass.data.get(DOMAIN, {}).get(entry_id)
+
+
+def _auth_ok(request, entry) -> bool:
+    """Validate the x-api-key header against the stored webhook secret."""
+    expected = entry.data.get(CONF_WEBHOOK_SECRET)
+    return expected and request.headers.get(WEBHOOK_AUTH_HEADER) == expected
+
+
+class ChargeAmpsHealthView(HomeAssistantView):
+    """Health-check endpoint — GET /api/chargeamps/{entry_id} returns 200 OK."""
+
+    url = "/api/chargeamps/{entry_id}"
+    name = "api:chargeamps:health"
+    requires_auth = False
+
+    async def get(self, request, entry_id: str):
+        """Handle health-check GET request."""
+        hass = request.app["hass"]
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if not entry or not _auth_ok(request, entry):
+            return Response(status=401)
+        return Response(status=200)
+
+
+class ChargeAmpsCallbackView(HomeAssistantView):
+    """Handle boot / heartbeat / metervalue callbacks from Charge Amps."""
+
+    url = "/api/chargeamps/{entry_id}/chargepoints/{chargepoint_id}/{event}"
+    name = "api:chargeamps:callback"
+    requires_auth = False
+
+    async def post(self, request, entry_id: str, chargepoint_id: str, event: str):
+        """Handle charge point event callback POST request."""
+        hass = request.app["hass"]
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if not entry or not _auth_ok(request, entry):
+            return Response(status=401)
+
+        coordinator = _get_coordinator_for_entry(hass, entry_id)
+        if not coordinator:
+            return Response(status=503)
+
+        try:
+            data = await request.json()
+        except Exception:
+            _LOGGER.error("Charge Amps callback: invalid JSON for event '%s'", event)
+            return Response(status=400)
+
+        _LOGGER.debug("Charge Amps callback: event=%s chargepoint=%s", event, chargepoint_id)
+
+        if event == "boot":
+            await coordinator.async_request_refresh()
+
+        elif event == "heartbeat":
+            try:
+                status = ChargePointStatus.model_validate(data)
+                coordinator.data["status"][chargepoint_id] = status
+                coordinator.async_set_updated_data(coordinator.data)
+            except Exception as exc:
+                _LOGGER.error("Heartbeat parse error: %s", exc)
+                return Response(status=422)
+
+        elif event == "metervalue":
+            for mv in data.get("meterValueList", []):
+                conn_id = mv.get("connectorId")
+                total_kwh = mv.get("totalConsumptionKWh")
+                status = coordinator.data["status"].get(chargepoint_id)
+                if not status:
+                    continue
+                new_statuses = [
+                    cs.model_copy(
+                        update={
+                            "total_consumption_kwh": total_kwh or cs.total_consumption_kwh,
+                            "measurements": [ChargePointMeasurement.model_validate(m) for m in mv.get("measurements") or []]
+                            or cs.measurements,
+                        }
+                    )
+                    if cs.connector_id == conn_id
+                    else cs
+                    for cs in status.connector_statuses
+                ]
+                coordinator.data["status"][chargepoint_id] = status.model_copy(update={"connector_statuses": new_statuses})
+            coordinator.async_set_updated_data(coordinator.data)
+
+        return Response(status=200)
+
+
+class ChargeAmpsConnectorCallbackView(HomeAssistantView):
+    """Handle connector Start / Stop callbacks from Charge Amps."""
+
+    url = "/api/chargeamps/{entry_id}/chargepoints/{chargepoint_id}/connectors/{connector_id}/{event}"
+    name = "api:chargeamps:connector_callback"
+    requires_auth = False
+
+    async def post(self, request, entry_id: str, chargepoint_id: str, connector_id: str, event: str):
+        """Handle connector event callback POST request."""
+        hass = request.app["hass"]
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if not entry or not _auth_ok(request, entry):
+            return Response(status=401)
+
+        coordinator = _get_coordinator_for_entry(hass, entry_id)
+        if not coordinator:
+            return Response(status=503)
+
+        _LOGGER.debug(
+            "Charge Amps callback: event=%s chargepoint=%s connector=%s",
+            event,
+            chargepoint_id,
+            connector_id,
+        )
+
+        # Trigger a full refresh so the new session data is fetched from the API
+        await coordinator.async_request_refresh()
+        return Response(status=200)
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry."""
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+    return unload_ok
+
+
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload config entry."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+class ChargeAmpsEntity(CoordinatorEntity[ChargeAmpsDataUpdateCoordinator]):
     """Chargeamps Entity class."""
 
-    def __init__(self, hass, name, charge_point_id, connector_id=None):
-        self.hass = hass
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: ChargeAmpsDataUpdateCoordinator,
+        charge_point_id: str,
+        connector_id: Optional[int] = None,
+    ):
+        """Initialize the entity."""
+        super().__init__(coordinator)
         self.charge_point_id = charge_point_id
         self.connector_id = connector_id
-        self.handler = self.hass.data[DOMAIN_DATA]["handler"]
-        self._name = name
-        self._state = None
-        self._attributes = {
-            "charge_point_id": charge_point_id,
-        }
         if connector_id is not None:
-            self._attributes["connector_id"] = connector_id
+            self._attr_translation_placeholders = {"connector": self.connector_name}
+
+    @property
+    def charge_point_name(self) -> str:
+        """Return the charge point name."""
+        cp = self.coordinator.data["chargepoints"].get(self.charge_point_id)
+        return cp.name if cp else self.charge_point_id
+
+    @property
+    def connector_name(self) -> str:
+        """Return the connector name, handling Halo Schuko logic."""
+        if self.connector_id is None:
+            return ""
+        cp = self.coordinator.data["chargepoints"].get(self.charge_point_id)
+        if cp and cp.type == "Halo" and self.connector_id == 2:
+            return "Schuko"
+        return f"Connector {self.connector_id}"
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return device information about this entity."""
+        cp = self.coordinator.data["chargepoints"].get(self.charge_point_id)
         return DeviceInfo(
-            name=self.name,
-            manufacturer=MANUFACTURER,
-            model=self._attributes.get("chargepoint_type"),
             identifiers={(DOMAIN, self.charge_point_id)},
+            name=self.charge_point_name,
+            manufacturer=MANUFACTURER,
+            model=cp.type if cp else None,
+            sw_version=cp.firmware_version if cp else None,
             configuration_url=CONFIGURATION_URL,
         )
-
-    @property
-    def name(self):
-        """Return the name of the sensor."""
-        return self._name
-
-    @property
-    def state(self):
-        """Return the state of the sensor."""
-        return self._state
-
-    @property
-    def icon(self):
-        """Icon to use in the frontend, if any."""
-        if not self.device_class:
-            connector_info = self.handler.get_connector_info(self.charge_point_id, self.connector_id)
-            if connector_info:
-                return ICON_MAP.get(connector_info.type, DEFAULT_ICON)
-            return DEFAULT_ICON
-
-    @property
-    def extra_state_attributes(self):
-        """Return the state attributes of the sensor."""
-        return self._attributes
-
-    @property
-    def unique_id(self):
-        """Return a unique ID to use for this sensor."""
-        return f"{DOMAIN}_{self.charge_point_id}_{self.connector_id}"

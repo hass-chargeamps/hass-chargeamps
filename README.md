@@ -8,60 +8,90 @@ The module was originally developed by [Kirei AB](https://www.kirei.se) and is n
 
 ## Installation
 
-Installation via [HACS](https://hacs.xyz/) (recommended) or by copying `custom_components/chargeamps` into your Home Assistant configuration directory.
+### Via HACS (Recommended)
+1. Open HACS in Home Assistant.
+2. Search for "Chargeamps".
+3. Click "Install".
+4. Restart Home Assistant.
 
-## Supported Hardware
+### Manual
+Copy `custom_components/chargeamps` into your Home Assistant `config/custom_components/` directory and restart.
 
-- [Aura](https://www.chargeamps.com/product/charge-amps-halo/)
-- [Dawn](https://www.chargeamps.com/product/charge-amps-dawn/)
-- [Halo](https://www.chargeamps.com/product/charge-amps-halo/)
+## Setup
 
+1. In Home Assistant, go to **Settings** -> **Devices & Services**.
+2. Click **Add Integration** and search for **Chargeamps**.
+3. Enter your credentials:
+   - **Email**: Your Charge Amps account email.
+   - **Password**: Your Charge Amps account password.
+   - **API Key**: Required (Get one from [Charge Amps Support](https://www.chargeamps.com/support/)).
+4. Click **Submit**.
 
-## Configuration
+## Features
 
-The component requires configuration via the Home Assistant configuration file. The following parameters are required:
+### Modern Entity-First Design
+The integration provides standard Home Assistant entities for full control and monitoring:
+- **Sensors**: Status, Power (W), Total Energy (kWh), and detailed Per-Phase Current (A) and Voltage (V).
+- **Switches**: Enable or disable charging connectors.
+- **Lights**: Control downlight and dimmer functionality (with brightness support).
+- **Locks**: Lock or unlock the charging cable.
+- **Numbers**: Set the maximum current limit (A) directly from the UI.
+- **Buttons**: Remotely reboot the charge point hardware.
 
-    chargeamps:
-      username: EMAIL_ADDRESS
-      password: SECRET_PASSWORD
-      api_key: SECRET_API_KEY
+### Real-time Updates (Optional Callbacks)
+By default the integration polls the Charge Amps API every 30 seconds. For instant updates when charging starts, stops, or the charger sends a heartbeat, you can ask Charge Amps to push events directly to your Home Assistant instance.
 
-The default is to configure all charge points for the account. To only include some charge points a list of charge point IDs can be provided using the `chargepoints` parameter (a list of strings).
+> **Note:** This requires your Home Assistant to be reachable from the internet (e.g. via [Nabu Casa / Home Assistant Cloud](https://www.nabucasa.com/) or your own reverse proxy). It also requires contacting Charge Amps support — it is not self-service.
 
-N.B. You will need an API key from [Charge Amps Support](https://www.chargeamps.com/support/) to use this component.
+#### Step 1 — Find your callback credentials
 
+When the integration is first set up, a **persistent notification** appears in the Home Assistant UI titled **"Charge Amps Webhook Credentials"**. It contains the three things you need to give Charge Amps support:
 
-## Entities
+| Field | Example |
+|---|---|
+| **Base URL** | `https://your-ha.duckdns.org/api/chargeamps/<entry_id>` |
+| **Auth header key** | `x-api-key` |
+| **Auth header value** | `a3f8...` (auto-generated token) |
 
-Each Chargeamps chargepoint connector will be represented as a sensor with the current status of the connector as the state. Each connector will also be represented as a switch that can be used to enable/disable the connector.
+Dismiss the notification once you have noted the details. The same information is always available under **Settings → Devices & Services → Chargeamps → Download diagnostics** in the `webhook` section.
 
-Lights (downlight/dimmer) appears are represented as lights.
+#### Step 2 — Verify reachability
 
-### Additional sensor attributes
+Before contacting support, confirm your setup works with a quick `curl`:
 
-- `charge_point_id`
-- `connector_id`
-- `total_consumption_kwh`
+```bash
+curl -i -H "x-api-key: <your-secret>" https://<your-ha-url>/api/chargeamps/<entry_id>
+```
 
-### Additional switch attributes
+| Response | Meaning |
+|---|---|
+| `200 OK` | URL and secret are correct — ready to hand to Charge Amps |
+| `401 Unauthorized` | URL is correct but secret is wrong |
+| `404 Not Found` | URL is wrong (typo, wrong entry_id, or HA not reachable externally) |
 
-- `charge_point_id`
-- `connector_id`
-- `max_current`
+#### Step 3 — Contact Charge Amps support
 
-### Additional light attributes
+Email Charge Amps support and ask them to configure callbacks for your charge point. Provide the three values above. Charge Amps will then POST events to your Home Assistant on each of the following:
 
-- `connector_id`
-- `light_type`
+| Event | Trigger |
+|---|---|
+| `boot` | Charge point rebooted |
+| `heartbeat` | Status update every ~30 s (idle only) |
+| `metervalue` | Power/energy reading every ~30 s (charging only) |
+| `Start` | Charging session started |
+| `Stop` | Charging session ended |
 
+### Hardware Support
+Includes specific naming and icons for:
+- **Aura**
+- **Dawn**
+- **Halo** (including specific **Schuko** socket support).
+
+## Diagnostics
+Go to **Settings → Devices & Services → Chargeamps → Download diagnostics** to get a file useful for troubleshooting. Sensitive credentials (email, password, API key) are redacted. The callback base URL, auth header key, and webhook token are included in plain text so you can retrieve them if needed.
 
 ## Services
+The integration also supports legacy services for advanced automations (see `services.yaml` for details).
 
-The following services are implemented by the component:
-
-- `set_light` -- set charge point lights
-- `set_max_current` -- set max current for connector
-- `enable` -- enable connector
-- `disable` -- disable connector
-- `remote_start` -- start a charging sessions when RFID lock is enabled
-- `remote_stop` -- stop charging sessions when RFID lock is enabled
+---
+*Disclaimer: This integration is an independent project and is not affiliated with Charge Amps AB.*
