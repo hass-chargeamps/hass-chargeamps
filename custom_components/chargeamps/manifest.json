@@ -3,6 +3,7 @@
   "name": "Chargeamps",
   "codeowners": ["@hass-chargeamps"],
   "config_flow": true,
+  "after_dependencies": ["http"],
   "dependencies": [],
   "documentation": "https://github.com/hass-chargeamps/hass-chargeamps",
   "iot_class": "cloud_polling",

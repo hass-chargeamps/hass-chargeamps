@@ -121,7 +121,4 @@
       }
     }
   },
-  "webhook": {
-    "description": "To enable real-time updates, configure the following webhook URL in your Charge Amps portal: https://<your-home-assistant-url>/api/webhook/<webhook_id>. You can find your unique webhook_id in the Home Assistant logs after setup."
-  }
 }
