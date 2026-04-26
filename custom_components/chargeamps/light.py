@@ -22,9 +22,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
         cp_info = handler.get_chargepoint_info(cp_id)
         cp_settings = handler.get_chargepoint_settings(cp_id)
         _LOGGER.debug("%s", cp_settings)
-        _type_to_snake = {
-                "dimmer": "dimmer",
-                "downlight":"down_light"}
+        _type_to_snake = {"dimmer": "dimmer", "downlight": "down_light"}
         for _type in ("dimmer", "downlight"):
             val = getattr(cp_settings, _type_to_snake[_type], None) if cp_settings else None
             if val is not None:
