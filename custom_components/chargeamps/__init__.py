@@ -24,6 +24,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .client import (
     ChargeAmpsClient,
+    ChargePointMeasurement,
     ChargePointStatus,
     StartAuth,
 )
@@ -330,7 +331,8 @@ class ChargeAmpsCallbackView(HomeAssistantView):
                     cs.model_copy(
                         update={
                             "total_consumption_kwh": total_kwh or cs.total_consumption_kwh,
-                            "measurements": mv.get("measurements") or cs.measurements,
+                            "measurements": [ChargePointMeasurement.model_validate(m) for m in mv.get("measurements") or []]
+                            or cs.measurements,
                         }
                     )
                     if cs.connector_id == conn_id
