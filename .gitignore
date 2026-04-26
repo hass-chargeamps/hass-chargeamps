@@ -3,3 +3,4 @@ venv
 .HA_VERSION
 home-assistant.log
 home-assistant_v2.db*
+Charge_Amps_External_Api_version_4.0.pdf
