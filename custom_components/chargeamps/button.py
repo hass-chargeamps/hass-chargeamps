@@ -29,6 +29,11 @@ BUTTONS: tuple[ChargeampsButtonEntityDescription, ...] = (
         device_class="restart",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    ChargeampsButtonEntityDescription(
+        key="recalculate_total_energy",
+        translation_key="recalculate_total_energy",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
 )
 
 
@@ -57,5 +62,8 @@ class ChargeampsButton(ChargeAmpsEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Handle the button press."""
-        _LOGGER.info("Rebooting chargepoint %s", self.charge_point_id)
-        await self.coordinator.client.reboot(self.charge_point_id)
+        if self.entity_description.key == "reboot":
+            _LOGGER.info("Rebooting chargepoint %s", self.charge_point_id)
+            await self.coordinator.client.reboot(self.charge_point_id)
+        elif self.entity_description.key == "recalculate_total_energy":
+            await self.coordinator.recalculate_total_energy(self.charge_point_id)
