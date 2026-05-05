@@ -1,7 +1,7 @@
 """Component to integrate with Chargeamps."""
 
+import hashlib
 import logging
-import secrets
 from datetime import timedelta
 from typing import Optional
 
@@ -100,7 +100,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     # Generate webhook secret on first setup and notify the user
     if CONF_WEBHOOK_SECRET not in entry.data:
-        secret = secrets.token_hex(32)
+        secret = hashlib.sha256(entry.data[CONF_API_KEY].encode()).hexdigest()
         hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_WEBHOOK_SECRET: secret})
         notify_create(
             hass,

@@ -10,7 +10,8 @@
           "email": "Email",
           "password": "Password",
           "api_key": "API Key",
-          "url": "API Base URL (optional)"
+          "url": "API Base URL (optional)",
+          "webhook_secret": "Webhook secret (optional — leave blank to auto-derive from API key)"
         }
       },
       "reauth_confirm": {
@@ -20,7 +21,8 @@
           "email": "Email",
           "password": "Password",
           "api_key": "API Key",
-          "url": "API Base URL (optional)"
+          "url": "API Base URL (optional)",
+          "webhook_secret": "Webhook secret (optional — leave blank to keep existing)"
         }
       }
     },
