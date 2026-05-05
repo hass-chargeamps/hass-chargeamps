@@ -210,14 +210,14 @@ class ChargeampsChargePointSensor(ChargeAmpsEntity, RestoreSensor):
         """Restore last known state into the coordinator watermark on startup."""
         await super().async_added_to_hass()
         if self.entity_description.key == "total_energy" and (last := await self.async_get_last_sensor_data()):
-                try:
-                    restored = float(last.native_value)
-                except (TypeError, ValueError):
-                    return
-                cp_id = self.charge_point_id
-                if restored > self.coordinator._total_energy_max.get(cp_id, 0.0):
-                    self.coordinator._total_energy_max[cp_id] = restored
-                    self.coordinator.data["total_energy"][cp_id] = restored
+            try:
+                restored = float(last.native_value)
+            except (TypeError, ValueError):
+                return
+            cp_id = self.charge_point_id
+            if restored > self.coordinator._total_energy_max.get(cp_id, 0.0):
+                self.coordinator._total_energy_max[cp_id] = restored
+                self.coordinator.data["total_energy"][cp_id] = restored
 
     @property
     def native_value(self) -> float | None:
