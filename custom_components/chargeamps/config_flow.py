@@ -20,7 +20,7 @@ from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client import ChargeAmpsClient
-from .const import CONF_CHARGEPOINTS, DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import CONF_CHARGEPOINTS, CONF_WEBHOOK_SECRET, DEFAULT_SCAN_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_PASSWORD): str,
         vol.Required(CONF_API_KEY): str,
         vol.Optional(CONF_URL): str,
+        vol.Optional(CONF_WEBHOOK_SECRET): str,
     }
 )
 
@@ -72,6 +73,8 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(user_input[CONF_EMAIL].lower())
             self._abort_if_unique_id_configured()
 
+            if not user_input.get(CONF_WEBHOOK_SECRET):
+                user_input.pop(CONF_WEBHOOK_SECRET, None)
             try:
                 info = await validate_input(self.hass, user_input)
             except Exception:  # pylint: disable=broad-except
@@ -107,6 +110,8 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Confirm re-authentication."""
         errors: dict[str, str] = {}
         if user_input is not None:
+            if not user_input.get(CONF_WEBHOOK_SECRET):
+                user_input.pop(CONF_WEBHOOK_SECRET, None)
             try:
                 await validate_input(self.hass, user_input)
             except Exception:
