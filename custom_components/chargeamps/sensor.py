@@ -209,8 +209,7 @@ class ChargeampsChargePointSensor(ChargeAmpsEntity, RestoreSensor):
     async def async_added_to_hass(self) -> None:
         """Restore last known state into the coordinator watermark on startup."""
         await super().async_added_to_hass()
-        if self.entity_description.key == "total_energy":
-            if last := await self.async_get_last_sensor_data():
+        if self.entity_description.key == "total_energy" and (last := await self.async_get_last_sensor_data()):
                 try:
                     restored = float(last.native_value)
                 except (TypeError, ValueError):
