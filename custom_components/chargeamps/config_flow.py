@@ -64,7 +64,7 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> ChargeAmpsOptionsFlowHandler:
         """Get the options flow for this handler."""
-        return ChargeAmpsOptionsFlowHandler(config_entry)
+        return ChargeAmpsOptionsFlowHandler()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle the initial step."""
@@ -133,10 +133,6 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class ChargeAmpsOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Chargeamps."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Manage the options."""
