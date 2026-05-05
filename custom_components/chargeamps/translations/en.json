@@ -110,6 +110,9 @@
     "button": {
       "reboot": {
         "name": "Reboot"
+      },
+      "recalculate_total_energy": {
+        "name": "Recalculate total energy"
       }
     },
     "light": {
