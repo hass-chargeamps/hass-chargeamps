@@ -149,6 +149,10 @@ def setup_services(hass: HomeAssistant) -> None:
         conn_id = call.data["connector"]
         max_curr = call.data["max_current"]
 
+        if 0 < max_curr < 6:
+            _LOGGER.error("Invalid max_current %s: must be 0 or between 6 and 32", max_curr)
+            return
+
         if coordinator := await get_coordinator(cp_id):
             settings = coordinator.data["connector_settings"].get((cp_id, conn_id))
             if settings:
