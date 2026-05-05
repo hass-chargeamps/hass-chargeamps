@@ -29,7 +29,7 @@ NUMBERS: tuple[ChargeampsNumberEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         device_class="current",
         mode=NumberMode.BOX,
-        native_min_value=6,
+        native_min_value=0,
         native_max_value=32,
         native_step=1,
         entity_category=EntityCategory.CONFIG,
@@ -65,10 +65,12 @@ class ChargeampsNumber(ChargeAmpsEntity, NumberEntity):
     def native_value(self) -> float:
         """Return the current maximum current setting."""
         settings = self.coordinator.data["connector_settings"].get((self.charge_point_id, self.connector_id))
-        return float(settings.max_current) if settings and settings.max_current else 6.0
+        return float(settings.max_current) if settings and settings.max_current is not None else 6.0
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the maximum current."""
+        if 0 < value < 6:
+            raise ValueError(f"Invalid max_current {value}: must be 0 or between 6 and 32")
         settings = self.coordinator.data["connector_settings"].get((self.charge_point_id, self.connector_id))
         if settings:
             settings.max_current = value

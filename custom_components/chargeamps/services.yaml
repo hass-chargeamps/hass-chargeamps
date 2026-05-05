@@ -38,8 +38,7 @@ set_max_current:
       name: Max current
       description: >
         The maximum current used for the charging process in A. Allowed are
-        values between 6 A and 63 A. Invalid values are discarded and the
-        default is set to 6 A.
+        0 A (to pause charging) or values between 6 A and 32 A.
       example: 16
 
 enable:
