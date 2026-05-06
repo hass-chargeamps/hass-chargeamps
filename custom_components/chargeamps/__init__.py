@@ -330,9 +330,7 @@ class ChargeAmpsCallbackView(HomeAssistantView):
                 total_kwh = mv.get("totalConsumptionKWh")
                 raw_measurements = mv.get("measurements")
                 parsed_measurements = (
-                    [ChargePointMeasurement.model_validate(m) for m in raw_measurements]
-                    if raw_measurements is not None
-                    else None
+                    [ChargePointMeasurement.model_validate(m) for m in raw_measurements] if raw_measurements is not None else None
                 )
                 status = coordinator.data["status"].get(chargepoint_id)
                 if not status:
