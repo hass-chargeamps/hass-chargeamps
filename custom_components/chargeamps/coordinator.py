@@ -82,11 +82,10 @@ class ChargeAmpsDataUpdateCoordinator(DataUpdateCoordinator):
 
                 # Calculate total energy — use a high watermark so the sensor doesn't
                 # drop to 0 between sessions (total_consumption_kwh resets per session).
-                live_total = round(sum(cs.total_consumption_kwh for cs in status.connector_statuses), 2)
-                prev_max = self._total_energy_max.get(cp.id, 0.0)
-                if live_total > prev_max:
-                    self._total_energy_max[cp.id] = live_total
-                data["total_energy"][cp.id] = self._total_energy_max[cp.id]
+                live_total = round(sum((cs.total_consumption_kwh or 0.0) for cs in status.connector_statuses), 2)
+                new_max = max(live_total, self._total_energy_max.get(cp.id, 0.0))
+                self._total_energy_max[cp.id] = new_max
+                data["total_energy"][cp.id] = new_max
 
             # Process all charge points in parallel
             await asyncio.gather(*(fetch_cp_data(cp) for cp in chargepoints))
