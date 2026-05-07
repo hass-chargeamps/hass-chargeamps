@@ -112,17 +112,21 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             if not user_input.get(CONF_WEBHOOK_SECRET):
                 user_input.pop(CONF_WEBHOOK_SECRET, None)
+            if not user_input.get(CONF_WEBHOOK_ID):
+                user_input.pop(CONF_WEBHOOK_ID, None)
             try:
                 await validate_input(self.hass, user_input)
             except Exception:
                 _LOGGER.exception("Unexpected exception during reconfigure")
                 errors["base"] = "unknown"
             else:
-                # Preserve existing webhook_secret if user left the field blank,
-                # so __init__.py doesn't treat it as a first-time setup and re-fire
-                # the webhook credentials notification.
+                # Preserve existing webhook_secret / webhook_id if the user left
+                # the fields blank, so __init__.py doesn't treat it as a first-time
+                # setup and re-fire the webhook credentials notification.
                 if CONF_WEBHOOK_SECRET not in user_input and entry and CONF_WEBHOOK_SECRET in entry.data:
                     user_input[CONF_WEBHOOK_SECRET] = entry.data[CONF_WEBHOOK_SECRET]
+                if CONF_WEBHOOK_ID not in user_input and entry and CONF_WEBHOOK_ID in entry.data:
+                    user_input[CONF_WEBHOOK_ID] = entry.data[CONF_WEBHOOK_ID]
                 return self.async_update_reload_and_abort(entry, data=user_input)
 
         return self.async_show_form(
