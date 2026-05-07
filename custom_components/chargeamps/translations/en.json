@@ -11,7 +11,20 @@
           "password": "Password",
           "api_key": "API Key",
           "url": "API Base URL (optional)",
-          "webhook_secret": "Webhook secret (optional — leave blank to auto-derive from API key)"
+          "webhook_secret": "Webhook secret (optional — leave blank to auto-derive from API key)",
+          "webhook_id": "Webhook URL ID (optional — leave blank to auto-derive from email)"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Chargeamps",
+        "description": "Update your Chargeamps credentials or API settings.",
+        "data": {
+          "email": "Email",
+          "password": "Password",
+          "api_key": "API Key",
+          "url": "API Base URL (optional)",
+          "webhook_secret": "Webhook secret (optional — leave blank to reset to auto-derived)",
+          "webhook_id": "Webhook URL ID (optional — leave blank to reset to auto-derived)"
         }
       },
       "reauth_confirm": {
@@ -22,18 +35,23 @@
           "password": "Password",
           "api_key": "API Key",
           "url": "API Base URL (optional)",
-          "webhook_secret": "Webhook secret (optional — leave blank to keep existing)"
+          "webhook_secret": "Webhook secret (optional — leave blank to keep existing)",
+          "webhook_id": "Webhook URL ID (optional — leave blank to keep existing)"
         }
       }
     },
     "error": {
       "cannot_connect": "Failed to connect",
       "invalid_auth": "Invalid authentication",
-      "unknown": "Unexpected error"
+      "unknown": "Unexpected error",
+      "invalid_webhook_id": "Only letters, numbers, hyphens, and underscores are allowed",
+      "invalid_webhook_secret": "Must be printable characters with no whitespace"
     },
     "abort": {
       "already_configured": "Device is already configured",
-      "reauth_successful": "Re-authentication was successful"
+      "reauth_successful": "Re-authentication was successful",
+      "reconfigure_successful": "Configuration updated successfully",
+      "wrong_account": "The credentials belong to a different account. Use Reconfigure only to update settings for the same account."
     }
   },
   "options": {
