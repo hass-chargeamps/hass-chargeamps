@@ -34,12 +34,10 @@ _WEBHOOK_SECRET_RE = re.compile(r"^[^\s\x00-\x1f\x7f]+$")
 def _validate_webhook_overrides(user_input: dict[str, Any]) -> dict[str, str]:
     """Return field-level errors for invalid webhook override values."""
     errors: dict[str, str] = {}
-    if wid := user_input.get(CONF_WEBHOOK_ID):
-        if not _WEBHOOK_ID_RE.match(wid):
-            errors[CONF_WEBHOOK_ID] = "invalid_webhook_id"
-    if secret := user_input.get(CONF_WEBHOOK_SECRET):
-        if not _WEBHOOK_SECRET_RE.match(secret):
-            errors[CONF_WEBHOOK_SECRET] = "invalid_webhook_secret"
+    if (wid := user_input.get(CONF_WEBHOOK_ID)) and not _WEBHOOK_ID_RE.match(wid):
+        errors[CONF_WEBHOOK_ID] = "invalid_webhook_id"
+    if (secret := user_input.get(CONF_WEBHOOK_SECRET)) and not _WEBHOOK_SECRET_RE.match(secret):
+        errors[CONF_WEBHOOK_SECRET] = "invalid_webhook_secret"
     return errors
 
 
