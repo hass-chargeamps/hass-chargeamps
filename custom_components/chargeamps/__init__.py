@@ -30,6 +30,7 @@ from .client import (
 )
 from .const import (
     CONF_CHARGEPOINTS,
+    CONF_WEBHOOK_ID,
     CONF_WEBHOOK_SECRET,
     CONFIGURATION_URL,
     DEFAULT_SCAN_INTERVAL,
@@ -96,7 +97,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     except NoURLAvailableError:
         base_url = "<your-ha-external-url>"
 
-    webhook_base = f"{base_url}/api/chargeamps/{entry.entry_id}"
+    webhook_base = f"{base_url}/api/chargeamps/{_webhook_url_segment(entry)}"
 
     # Generate webhook secret on first setup and notify the user
     if CONF_WEBHOOK_SECRET not in entry.data:
@@ -264,6 +265,37 @@ def _get_coordinator_for_entry(hass: HomeAssistant, entry_id: str):
     return hass.data.get(DOMAIN, {}).get(entry_id)
 
 
+def _webhook_url_segment(entry: ConfigEntry) -> str:
+    """Return the URL segment for this entry's webhook paths.
+
+    Prefers an explicit override, then a stable SHA-256 of the unique_id
+    (lowercased email), and falls back to entry_id for legacy YAML-imported
+    entries that never got a unique_id.
+    """
+    return entry.data.get(CONF_WEBHOOK_ID) or (
+        hashlib.sha256(entry.unique_id.encode()).hexdigest() if entry.unique_id else entry.entry_id
+    )
+
+
+def _resolve_entry(hass: HomeAssistant, path_segment: str):
+    """Resolve a webhook URL segment to a ConfigEntry.
+
+    Accepts three forms (tried in order):
+      1. A raw HA entry UUID (old-style URLs — backwards compat)
+      2. An explicit CONF_WEBHOOK_ID override stored in entry.data
+      3. SHA-256 hex digest of entry.unique_id (new stable default)
+    """
+    entry = hass.config_entries.async_get_entry(path_segment)
+    if entry and entry.domain == DOMAIN:
+        return entry
+
+    for candidate in hass.config_entries.async_entries(DOMAIN):
+        if _webhook_url_segment(candidate) == path_segment:
+            return candidate
+
+    return None
+
+
 def _auth_ok(request, entry) -> bool:
     """Validate the x-api-key header against the stored webhook secret."""
     expected = entry.data.get(CONF_WEBHOOK_SECRET)
@@ -280,7 +312,7 @@ class ChargeAmpsHealthView(HomeAssistantView):
     async def get(self, request, entry_id: str):
         """Handle health-check GET request."""
         hass = request.app["hass"]
-        entry = hass.config_entries.async_get_entry(entry_id)
+        entry = _resolve_entry(hass, entry_id)
         if not entry or not _auth_ok(request, entry):
             return Response(status=401)
         return Response(status=200)
@@ -296,11 +328,11 @@ class ChargeAmpsCallbackView(HomeAssistantView):
     async def post(self, request, entry_id: str, chargepoint_id: str, event: str):
         """Handle charge point event callback POST request."""
         hass = request.app["hass"]
-        entry = hass.config_entries.async_get_entry(entry_id)
+        entry = _resolve_entry(hass, entry_id)
         if not entry or not _auth_ok(request, entry):
             return Response(status=401)
 
-        coordinator = _get_coordinator_for_entry(hass, entry_id)
+        coordinator = _get_coordinator_for_entry(hass, entry.entry_id)
         if not coordinator:
             return Response(status=503)
 
@@ -362,11 +394,11 @@ class ChargeAmpsConnectorCallbackView(HomeAssistantView):
     async def post(self, request, entry_id: str, chargepoint_id: str, connector_id: str, event: str):
         """Handle connector event callback POST request."""
         hass = request.app["hass"]
-        entry = hass.config_entries.async_get_entry(entry_id)
+        entry = _resolve_entry(hass, entry_id)
         if not entry or not _auth_ok(request, entry):
             return Response(status=401)
 
-        coordinator = _get_coordinator_for_entry(hass, entry_id)
+        coordinator = _get_coordinator_for_entry(hass, entry.entry_id)
         if not coordinator:
             return Response(status=503)
 

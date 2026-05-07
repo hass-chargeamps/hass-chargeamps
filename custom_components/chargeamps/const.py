@@ -44,6 +44,7 @@ ICON_MAP = {
 CONF_CHARGEPOINTS = "chargepoints"
 CONF_READONLY = "readonly"
 CONF_WEBHOOK_SECRET = "webhook_secret"
+CONF_WEBHOOK_ID = "webhook_id"
 
 # Webhook
 WEBHOOK_AUTH_HEADER = "x-api-key"
