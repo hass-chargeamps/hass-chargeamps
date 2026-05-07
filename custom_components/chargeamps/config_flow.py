@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import voluptuous as vol
@@ -23,6 +24,24 @@ from .client import ChargeAmpsClient
 from .const import CONF_CHARGEPOINTS, CONF_WEBHOOK_ID, CONF_WEBHOOK_SECRET, DEFAULT_SCAN_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
+# Webhook URL ID must be safe as a URL path segment (alphanumeric, dash, underscore)
+_WEBHOOK_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
+# Webhook secret must be printable, non-whitespace ASCII (it's sent as an HTTP header value)
+_WEBHOOK_SECRET_RE = re.compile(r"^[^\s\x00-\x1f\x7f]+$")
+
+
+def _validate_webhook_overrides(user_input: dict[str, Any]) -> dict[str, str]:
+    """Return field-level errors for invalid webhook override values."""
+    errors: dict[str, str] = {}
+    if wid := user_input.get(CONF_WEBHOOK_ID):
+        if not _WEBHOOK_ID_RE.match(wid):
+            errors[CONF_WEBHOOK_ID] = "invalid_webhook_id"
+    if secret := user_input.get(CONF_WEBHOOK_SECRET):
+        if not _WEBHOOK_SECRET_RE.match(secret):
+            errors[CONF_WEBHOOK_SECRET] = "invalid_webhook_secret"
+    return errors
+
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
@@ -78,13 +97,15 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input.pop(CONF_WEBHOOK_SECRET, None)
             if not user_input.get(CONF_WEBHOOK_ID):
                 user_input.pop(CONF_WEBHOOK_ID, None)
-            try:
-                info = await validate_input(self.hass, user_input)
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception")
-                errors["base"] = "unknown"
-            else:
-                return self.async_create_entry(title=info["title"], data=user_input)
+            errors |= _validate_webhook_overrides(user_input)
+            if not errors:
+                try:
+                    info = await validate_input(self.hass, user_input)
+                except Exception:  # pylint: disable=broad-except
+                    _LOGGER.exception("Unexpected exception")
+                    errors["base"] = "unknown"
+                else:
+                    return self.async_create_entry(title=info["title"], data=user_input)
 
         return self.async_show_form(step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors)
 
@@ -110,19 +131,21 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
         if user_input is not None:
-            try:
-                await validate_input(self.hass, user_input)
-            except Exception:
-                _LOGGER.exception("Unexpected exception during reconfigure")
-                errors["base"] = "unknown"
-            else:
-                await self.async_set_unique_id(user_input[CONF_EMAIL].lower())
-                self._abort_if_unique_id_mismatch(reason="wrong_account")
-                new_data = {**entry.data, **user_input}
-                for key in (CONF_WEBHOOK_SECRET, CONF_WEBHOOK_ID):
-                    if not new_data.get(key):
-                        new_data.pop(key, None)
-                return self.async_update_reload_and_abort(entry, data=new_data)
+            errors |= _validate_webhook_overrides(user_input)
+            if not errors:
+                try:
+                    await validate_input(self.hass, user_input)
+                except Exception:
+                    _LOGGER.exception("Unexpected exception during reconfigure")
+                    errors["base"] = "unknown"
+                else:
+                    await self.async_set_unique_id(user_input[CONF_EMAIL].lower())
+                    self._abort_if_unique_id_mismatch(reason="wrong_account")
+                    new_data = {**entry.data, **user_input}
+                    for key in (CONF_WEBHOOK_SECRET, CONF_WEBHOOK_ID):
+                        if not new_data.get(key):
+                            new_data.pop(key, None)
+                    return self.async_update_reload_and_abort(entry, data=new_data)
 
         return self.async_show_form(
             step_id="reconfigure",
@@ -142,16 +165,18 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input.pop(CONF_WEBHOOK_SECRET, None)
             if not user_input.get(CONF_WEBHOOK_ID):
                 user_input.pop(CONF_WEBHOOK_ID, None)
-            try:
-                await validate_input(self.hass, user_input)
-            except Exception:
-                _LOGGER.exception("Unexpected exception during re-auth")
-                errors["base"] = "unknown"
-            else:
-                entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
-                self.hass.config_entries.async_update_entry(entry, data={**entry.data, **user_input})
-                await self.hass.config_entries.async_reload(entry.entry_id)
-                return self.async_abort(reason="reauth_successful")
+            errors |= _validate_webhook_overrides(user_input)
+            if not errors:
+                try:
+                    await validate_input(self.hass, user_input)
+                except Exception:
+                    _LOGGER.exception("Unexpected exception during re-auth")
+                    errors["base"] = "unknown"
+                else:
+                    entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+                    self.hass.config_entries.async_update_entry(entry, data={**entry.data, **user_input})
+                    await self.hass.config_entries.async_reload(entry.entry_id)
+                    return self.async_abort(reason="reauth_successful")
 
         entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
         return self.async_show_form(
