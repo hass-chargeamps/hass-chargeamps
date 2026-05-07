@@ -10,6 +10,7 @@ from homeassistant.const import CONF_API_KEY, CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 
+from . import _webhook_url_segment
 from .const import CONF_WEBHOOK_SECRET, DOMAIN, WEBHOOK_AUTH_HEADER
 
 REDACT_KEYS = {CONF_API_KEY, CONF_EMAIL, CONF_PASSWORD, CONF_WEBHOOK_SECRET, "password", "rfid"}
@@ -19,11 +20,12 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
     """Return diagnostics for a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
+    url_segment = _webhook_url_segment(entry)
     try:
         base_url = get_url(hass, prefer_external=True)
-        webhook_base = f"{base_url}/api/chargeamps/{entry.entry_id}"
+        webhook_base = f"{base_url}/api/chargeamps/{url_segment}"
     except NoURLAvailableError:
-        webhook_base = f"<ha-external-url>/api/chargeamps/{entry.entry_id}"
+        webhook_base = f"<ha-external-url>/api/chargeamps/{url_segment}"
 
     return {
         "entry": {

@@ -20,7 +20,7 @@ from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client import ChargeAmpsClient
-from .const import CONF_CHARGEPOINTS, CONF_WEBHOOK_SECRET, DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import CONF_CHARGEPOINTS, CONF_WEBHOOK_ID, CONF_WEBHOOK_SECRET, DEFAULT_SCAN_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +31,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_API_KEY): str,
         vol.Optional(CONF_URL): str,
         vol.Optional(CONF_WEBHOOK_SECRET): str,
+        vol.Optional(CONF_WEBHOOK_ID): str,
     }
 )
 
@@ -75,6 +76,8 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if not user_input.get(CONF_WEBHOOK_SECRET):
                 user_input.pop(CONF_WEBHOOK_SECRET, None)
+            if not user_input.get(CONF_WEBHOOK_ID):
+                user_input.pop(CONF_WEBHOOK_ID, None)
             try:
                 info = await validate_input(self.hass, user_input)
             except Exception:  # pylint: disable=broad-except
@@ -112,6 +115,8 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             if not user_input.get(CONF_WEBHOOK_SECRET):
                 user_input.pop(CONF_WEBHOOK_SECRET, None)
+            if not user_input.get(CONF_WEBHOOK_ID):
+                user_input.pop(CONF_WEBHOOK_ID, None)
             try:
                 await validate_input(self.hass, user_input)
             except Exception:
