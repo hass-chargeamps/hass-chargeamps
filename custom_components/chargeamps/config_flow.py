@@ -107,7 +107,7 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Allow the user to update credentials or settings without removing the entry."""
-        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
         if user_input is not None:
             if not user_input.get(CONF_WEBHOOK_SECRET):
@@ -120,18 +120,13 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception during reconfigure")
                 errors["base"] = "unknown"
             else:
-                # Preserve existing webhook_secret / webhook_id if the user left
-                # the fields blank, so __init__.py doesn't treat it as a first-time
-                # setup and re-fire the webhook credentials notification.
-                if CONF_WEBHOOK_SECRET not in user_input and entry and CONF_WEBHOOK_SECRET in entry.data:
-                    user_input[CONF_WEBHOOK_SECRET] = entry.data[CONF_WEBHOOK_SECRET]
-                if CONF_WEBHOOK_ID not in user_input and entry and CONF_WEBHOOK_ID in entry.data:
-                    user_input[CONF_WEBHOOK_ID] = entry.data[CONF_WEBHOOK_ID]
-                return self.async_update_reload_and_abort(entry, data=user_input)
+                await self.async_set_unique_id(user_input[CONF_EMAIL].lower())
+                self._abort_if_unique_id_mismatch(reason="wrong_account")
+                return self.async_update_reload_and_abort(entry, data_updates=user_input)
 
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=self.add_suggested_values_to_schema(STEP_USER_DATA_SCHEMA, entry.data if entry else {}),
+            data_schema=self.add_suggested_values_to_schema(STEP_USER_DATA_SCHEMA, entry.data),
             errors=errors,
         )
 

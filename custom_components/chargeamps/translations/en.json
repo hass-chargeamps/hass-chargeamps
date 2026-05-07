@@ -48,7 +48,8 @@
     "abort": {
       "already_configured": "Device is already configured",
       "reauth_successful": "Re-authentication was successful",
-      "reconfigure_successful": "Configuration updated successfully"
+      "reconfigure_successful": "Configuration updated successfully",
+      "wrong_account": "The credentials belong to a different account. Use Reconfigure only to update settings for the same account."
     }
   },
   "options": {
