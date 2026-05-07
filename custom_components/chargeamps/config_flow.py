@@ -110,10 +110,6 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
         if user_input is not None:
-            if not user_input.get(CONF_WEBHOOK_SECRET):
-                user_input.pop(CONF_WEBHOOK_SECRET, None)
-            if not user_input.get(CONF_WEBHOOK_ID):
-                user_input.pop(CONF_WEBHOOK_ID, None)
             try:
                 await validate_input(self.hass, user_input)
             except Exception:
@@ -122,7 +118,11 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 await self.async_set_unique_id(user_input[CONF_EMAIL].lower())
                 self._abort_if_unique_id_mismatch(reason="wrong_account")
-                return self.async_update_reload_and_abort(entry, data_updates=user_input)
+                new_data = {**entry.data, **user_input}
+                for key in (CONF_WEBHOOK_SECRET, CONF_WEBHOOK_ID):
+                    if not new_data.get(key):
+                        new_data.pop(key, None)
+                return self.async_update_reload_and_abort(entry, data=new_data)
 
         return self.async_show_form(
             step_id="reconfigure",
