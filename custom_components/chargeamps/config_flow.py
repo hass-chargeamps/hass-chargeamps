@@ -102,6 +102,32 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         clean_data = {k: v for k, v in import_data.items() if k in (CONF_EMAIL, CONF_PASSWORD, CONF_API_KEY, CONF_URL)}
         return self.async_create_entry(title=clean_data[CONF_EMAIL], data=clean_data, options=options)
 
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Allow the user to update credentials or settings without removing the entry."""
+        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if not user_input.get(CONF_WEBHOOK_SECRET):
+                user_input.pop(CONF_WEBHOOK_SECRET, None)
+            try:
+                await validate_input(self.hass, user_input)
+            except Exception:
+                _LOGGER.exception("Unexpected exception during reconfigure")
+                errors["base"] = "unknown"
+            else:
+                # Preserve existing webhook_secret if user left the field blank,
+                # so __init__.py doesn't treat it as a first-time setup and re-fire
+                # the webhook credentials notification.
+                if CONF_WEBHOOK_SECRET not in user_input and entry and CONF_WEBHOOK_SECRET in entry.data:
+                    user_input[CONF_WEBHOOK_SECRET] = entry.data[CONF_WEBHOOK_SECRET]
+                return self.async_update_reload_and_abort(entry, data=user_input)
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(STEP_USER_DATA_SCHEMA, entry.data if entry else {}),
+            errors=errors,
+        )
+
     async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
         """Handle re-authentication — show the form immediately."""
         return await self.async_step_reauth_confirm()

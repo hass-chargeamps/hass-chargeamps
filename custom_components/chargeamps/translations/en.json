@@ -14,6 +14,17 @@
           "webhook_secret": "Webhook secret (optional — leave blank to auto-derive from API key)"
         }
       },
+      "reconfigure": {
+        "title": "Reconfigure Chargeamps",
+        "description": "Update your Chargeamps credentials or API settings.",
+        "data": {
+          "email": "Email",
+          "password": "Password",
+          "api_key": "API Key",
+          "url": "API Base URL (optional)",
+          "webhook_secret": "Webhook secret (optional — leave blank to keep existing)"
+        }
+      },
       "reauth_confirm": {
         "title": "Re-authenticate Chargeamps",
         "description": "Your credentials are no longer valid. Please update them below.",
@@ -33,7 +44,8 @@
     },
     "abort": {
       "already_configured": "Device is already configured",
-      "reauth_successful": "Re-authentication was successful"
+      "reauth_successful": "Re-authentication was successful",
+      "reconfigure_successful": "Configuration updated successfully"
     }
   },
   "options": {
