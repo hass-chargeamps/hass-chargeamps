@@ -154,12 +154,8 @@ def setup_services(hass: HomeAssistant) -> None:
         """Set the maximum charging current for a connector."""
         cp_id = call.data["chargepoint"]
         conn_id = _parse_int_field(call, "connector")
-        if conn_id is None:
-            _LOGGER.error("Invalid connector %s: must be an integer", conn_id)
-            return
         max_curr = _parse_int_field(call, "max_current")
-        if max_curr is None:
-            _LOGGER.error("Invalid max_current %s: must be an integer", max_curr)
+        if conn_id is None or max_curr is None:
             return
 
         if 0 < max_curr < 6:
@@ -196,7 +192,6 @@ def setup_services(hass: HomeAssistant) -> None:
         cp_id = call.data["chargepoint"]
         conn_id = _parse_int_field(call, "connector")
         if conn_id is None:
-            _LOGGER.error("Invalid connector %s: must be an integer", conn_id)
             return
         if coordinator := await get_coordinator(cp_id):
             settings = coordinator.data["connector_settings"].get((cp_id, conn_id))
@@ -210,7 +205,6 @@ def setup_services(hass: HomeAssistant) -> None:
         cp_id = call.data["chargepoint"]
         conn_id = _parse_int_field(call, "connector")
         if conn_id is None:
-            _LOGGER.error("Invalid connector %s: must be an integer", conn_id)
             return
         if coordinator := await get_coordinator(cp_id):
             settings = coordinator.data["connector_settings"].get((cp_id, conn_id))
@@ -224,7 +218,6 @@ def setup_services(hass: HomeAssistant) -> None:
         cp_id = call.data["chargepoint"]
         conn_id = _parse_int_field(call, "connector")
         if conn_id is None:
-            _LOGGER.error("Invalid connector %s: must be an integer", conn_id)
             return
         if coordinator := await get_coordinator(cp_id):
             settings = coordinator.data["connector_settings"].get((cp_id, conn_id))
@@ -238,7 +231,6 @@ def setup_services(hass: HomeAssistant) -> None:
         cp_id = call.data["chargepoint"]
         conn_id = _parse_int_field(call, "connector")
         if conn_id is None:
-            _LOGGER.error("Invalid connector %s: must be an integer", conn_id)
             return
         if coordinator := await get_coordinator(cp_id):
             settings = coordinator.data["connector_settings"].get((cp_id, conn_id))
@@ -252,7 +244,6 @@ def setup_services(hass: HomeAssistant) -> None:
         cp_id = call.data["chargepoint"]
         conn_id = _parse_int_field(call, "connector")
         if conn_id is None:
-            _LOGGER.error("Invalid connector %s: must be an integer", conn_id)
             return
         auth = StartAuth(
             rfid_length=call.data.get("rfid_length", 4),
@@ -269,7 +260,6 @@ def setup_services(hass: HomeAssistant) -> None:
         cp_id = call.data["chargepoint"]
         conn_id = _parse_int_field(call, "connector")
         if conn_id is None:
-            _LOGGER.error("Invalid connector %s: must be an integer", conn_id)
             return
         if coordinator := await get_coordinator(cp_id):
             await coordinator.client.remote_stop(cp_id, conn_id)
