@@ -129,11 +129,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     return True
 
-
 def setup_services(hass: HomeAssistant) -> None:
     """Register services for Chargeamps."""
     if hass.services.has_service(DOMAIN, "set_max_current"):
         return
+
+    def _parse_int_field(call: ServiceCall, field: str) -> int | None:
+        try:
+            return int(call.data[field])
+        except (KeyError, TypeError, ValueError):
+            _LOGGER.error("Invalid %s value: %r", field, call.data.get(field))
+            return None
 
     async def get_coordinator(chargepoint_id: str) -> Optional[ChargeAmpsDataUpdateCoordinator]:
         """Find the coordinator matching a charge point ID."""
@@ -147,8 +153,10 @@ def setup_services(hass: HomeAssistant) -> None:
     async def async_set_max_current(call: ServiceCall):
         """Set the maximum charging current for a connector."""
         cp_id = call.data["chargepoint"]
-        conn_id = call.data["connector"]
-        max_curr = call.data["max_current"]
+        conn_id = _parse_int_field(call, "connector")
+        max_curr = _parse_int_field(call, "max_current")
+        if conn_id is None or max_curr is None:
+            return
 
         if 0 < max_curr < 6:
             _LOGGER.error("Invalid max_current %s: must be 0 or between 6 and 32", max_curr)
@@ -182,7 +190,9 @@ def setup_services(hass: HomeAssistant) -> None:
     async def async_enable_ev(call: ServiceCall):
         """Enable EV charging on a connector."""
         cp_id = call.data["chargepoint"]
-        conn_id = call.data["connector"]
+        conn_id = _parse_int_field(call, "connector")
+        if conn_id is None:
+            return
         if coordinator := await get_coordinator(cp_id):
             settings = coordinator.data["connector_settings"].get((cp_id, conn_id))
             if settings:
@@ -193,7 +203,9 @@ def setup_services(hass: HomeAssistant) -> None:
     async def async_disable_ev(call: ServiceCall):
         """Disable EV charging on a connector."""
         cp_id = call.data["chargepoint"]
-        conn_id = call.data["connector"]
+        conn_id = _parse_int_field(call, "connector")
+        if conn_id is None:
+            return
         if coordinator := await get_coordinator(cp_id):
             settings = coordinator.data["connector_settings"].get((cp_id, conn_id))
             if settings:
@@ -204,7 +216,9 @@ def setup_services(hass: HomeAssistant) -> None:
     async def async_cable_lock(call: ServiceCall):
         """Lock the cable on a connector."""
         cp_id = call.data["chargepoint"]
-        conn_id = call.data["connector"]
+        conn_id = _parse_int_field(call, "connector")
+        if conn_id is None:
+            return
         if coordinator := await get_coordinator(cp_id):
             settings = coordinator.data["connector_settings"].get((cp_id, conn_id))
             if settings:
@@ -215,7 +229,9 @@ def setup_services(hass: HomeAssistant) -> None:
     async def async_cable_unlock(call: ServiceCall):
         """Unlock the cable on a connector."""
         cp_id = call.data["chargepoint"]
-        conn_id = call.data["connector"]
+        conn_id = _parse_int_field(call, "connector")
+        if conn_id is None:
+            return
         if coordinator := await get_coordinator(cp_id):
             settings = coordinator.data["connector_settings"].get((cp_id, conn_id))
             if settings:
@@ -226,7 +242,9 @@ def setup_services(hass: HomeAssistant) -> None:
     async def async_remote_start(call: ServiceCall):
         """Remotely start a charging session on a connector."""
         cp_id = call.data["chargepoint"]
-        conn_id = call.data["connector"]
+        conn_id = _parse_int_field(call, "connector")
+        if conn_id is None:
+            return
         auth = StartAuth(
             rfid_length=call.data.get("rfid_length", 4),
             rfid_format=call.data.get("rfid_format", "Dec"),
@@ -240,7 +258,9 @@ def setup_services(hass: HomeAssistant) -> None:
     async def async_remote_stop(call: ServiceCall):
         """Remotely stop a charging session on a connector."""
         cp_id = call.data["chargepoint"]
-        conn_id = call.data["connector"]
+        conn_id = _parse_int_field(call, "connector")
+        if conn_id is None:
+            return
         if coordinator := await get_coordinator(cp_id):
             await coordinator.client.remote_stop(cp_id, conn_id)
             await coordinator.async_request_refresh()
