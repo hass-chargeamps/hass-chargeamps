@@ -114,7 +114,18 @@
     },
     "switch": {
       "enable": {
-        "name": "{connector}"
+        "name": "{connector}",
+        "state": {
+          "on": "Enabled",
+          "off": "Disabled"
+        }
+      },
+      "schedule": {
+        "name": "{connector} Schedule",
+        "state": {
+          "on": "Active",
+          "off": "Inactive"
+        }
       }
     },
     "lock": {
