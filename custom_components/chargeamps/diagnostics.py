@@ -27,6 +27,9 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
     except NoURLAvailableError:
         webhook_base = f"<ha-external-url>/api/chargeamps/{url_segment}"
 
+    data = dict(coordinator.data)
+    data["connector_settings"] = {f"{cp_id}/{conn_id}": v for (cp_id, conn_id), v in coordinator.data["connector_settings"].items()}
+
     return {
         "entry": {
             "title": entry.title,
@@ -38,5 +41,5 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
             "auth_header_key": WEBHOOK_AUTH_HEADER,
             "auth_header_value": "<redacted>" if entry.data.get(CONF_WEBHOOK_SECRET) else "not yet generated",
         },
-        "data": async_redact_data(coordinator.data, REDACT_KEYS),
+        "data": async_redact_data(data, REDACT_KEYS),
     }
