@@ -371,6 +371,7 @@ class ChargeAmpsCallbackView(HomeAssistantView):
             try:
                 status = ChargePointStatus.model_validate(data)
                 coordinator.data["status"][chargepoint_id] = status
+                coordinator.sync_total_energy_from_status(chargepoint_id)
                 coordinator.async_set_updated_data(coordinator.data)
             except Exception as exc:
                 _LOGGER.error("Heartbeat parse error: %s", exc)
@@ -399,6 +400,7 @@ class ChargeAmpsCallbackView(HomeAssistantView):
                     for cs in status.connector_statuses
                 ]
                 coordinator.data["status"][chargepoint_id] = status.model_copy(update={"connector_statuses": new_statuses})
+            coordinator.sync_total_energy_from_status(chargepoint_id)
             coordinator.async_set_updated_data(coordinator.data)
 
         return Response(status=200)

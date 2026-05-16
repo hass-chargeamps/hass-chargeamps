@@ -32,7 +32,8 @@ class ChargeAmpsDataUpdateCoordinator(DataUpdateCoordinator):
         """Initialize."""
         self.client = client
         self._chargepoint_ids = chargepoint_ids or []
-        self._total_energy_max: dict[str, float] = {}
+        self._completed_energy_baseline: dict[str, float] = {}
+        self._completed_session_ids: dict[str, set[int]] = {}
         super().__init__(
             hass,
             _LOGGER,
@@ -66,8 +67,9 @@ class ChargeAmpsDataUpdateCoordinator(DataUpdateCoordinator):
                 """Fetch all data for a single charge point in parallel."""
                 status_task = self.client.get_chargepoint_status(cp.id)
                 settings_task = self.client.get_chargepoint_settings(cp.id)
+                sessions_task = self.client.get_all_chargingsessions(cp.id)
 
-                status, settings = await asyncio.gather(status_task, settings_task)
+                status, settings, sessions = await asyncio.gather(status_task, settings_task, sessions_task)
 
                 data["status"][cp.id] = status
                 data["settings"][cp.id] = settings
@@ -80,12 +82,16 @@ class ChargeAmpsDataUpdateCoordinator(DataUpdateCoordinator):
                 for i, conn in enumerate(cp.connectors):
                     data["connector_settings"][(cp.id, conn.connector_id)] = conn_settings_results[i]
 
-                # Calculate total energy — use a high watermark so the sensor doesn't
-                # drop to 0 between sessions (total_consumption_kwh resets per session).
-                live_total = round(sum((cs.total_consumption_kwh or 0.0) for cs in status.connector_statuses), 2)
-                new_max = max(live_total, self._total_energy_max.get(cp.id, 0.0))
-                self._total_energy_max[cp.id] = new_max
-                data["total_energy"][cp.id] = new_max
+                # Compute cumulative energy: all completed sessions + any active session not yet recorded
+                completed_ids = {s.id for s in sessions if s.end_time is not None}
+                completed_total = sum((s.total_consumption_kwh or 0.0) for s in sessions if s.end_time is not None)
+                self._completed_energy_baseline[cp.id] = completed_total
+                self._completed_session_ids[cp.id] = completed_ids
+
+                active_total = sum(
+                    (cs.total_consumption_kwh or 0.0) for cs in status.connector_statuses if cs.session_id not in completed_ids
+                )
+                data["total_energy"][cp.id] = round(completed_total + active_total, 2)
 
             # Process all charge points in parallel
             await asyncio.gather(*(fetch_cp_data(cp) for cp in chargepoints))
@@ -95,27 +101,38 @@ class ChargeAmpsDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.exception("Error updating Chargeamps data")
             raise UpdateFailed(f"Error communicating with API: {error}") from error
 
-    async def recalculate_total_energy(self, charge_point_id: str) -> float:
-        """Recompute total energy from the full session history in the Charge Amps API.
+    def sync_total_energy_from_status(self, chargepoint_id: str) -> None:
+        """Update total energy from live connector statuses between polls (webhook real-time updates)."""
+        if chargepoint_id not in self._completed_energy_baseline:
+            return
+        status = self.data["status"].get(chargepoint_id)
+        if not status:
+            return
+        baseline = self._completed_energy_baseline[chargepoint_id]
+        completed_ids = self._completed_session_ids.get(chargepoint_id, set())
+        active_total = round(
+            sum((cs.total_consumption_kwh or 0.0) for cs in status.connector_statuses if cs.session_id not in completed_ids),
+            2,
+        )
+        self.data["total_energy"][chargepoint_id] = round(baseline + active_total, 2)
 
-        Sums all completed sessions plus any ongoing session energy from the live
-        status, then updates the high watermark so subsequent polls don't overwrite it.
-        """
+    async def recalculate_total_energy(self, charge_point_id: str) -> float:
+        """Recompute total energy from the full session history in the Charge Amps API."""
         sessions = await self.client.get_all_chargingsessions(charge_point_id)
         completed_ids = {s.id for s in sessions if s.end_time is not None}
-        completed_total = sum(s.total_consumption_kwh for s in sessions if s.end_time is not None)
+        completed_total = sum((s.total_consumption_kwh or 0.0) for s in sessions if s.end_time is not None)
+        self._completed_energy_baseline[charge_point_id] = completed_total
+        self._completed_session_ids[charge_point_id] = completed_ids
 
-        # Add energy for any active session not yet recorded as completed
         active_total = 0.0
         status = self.data["status"].get(charge_point_id)
         if status:
-            for cs in status.connector_statuses:
-                if cs.session_id not in completed_ids:
-                    active_total += cs.total_consumption_kwh or 0.0
+            active_total = sum(
+                (cs.total_consumption_kwh or 0.0) for cs in status.connector_statuses if cs.session_id not in completed_ids
+            )
 
         total = round(completed_total + active_total, 2)
-        self._total_energy_max[charge_point_id] = max(total, self._total_energy_max.get(charge_point_id, 0.0))
-        self.data["total_energy"][charge_point_id] = self._total_energy_max[charge_point_id]
+        self.data["total_energy"][charge_point_id] = total
         self.async_set_updated_data(self.data)
-        _LOGGER.info("Recalculated total energy for %s: %.2f kWh", charge_point_id, self._total_energy_max[charge_point_id])
-        return self._total_energy_max[charge_point_id]
+        _LOGGER.info("Recalculated total energy for %s: %.2f kWh", charge_point_id, total)
+        return total
