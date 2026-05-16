@@ -129,6 +129,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     return True
 
+
 def setup_services(hass: HomeAssistant) -> None:
     """Register services for Chargeamps."""
     if hass.services.has_service(DOMAIN, "set_max_current"):
