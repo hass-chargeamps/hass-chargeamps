@@ -245,10 +245,10 @@ class ChargeAmpsClient:
         """Get all owned chargepoints."""
         if self._organisation_id:
             request_uri = f"/api/{API_VERSION}/organisations/{self._organisation_id}/chargepoints"
-            self._logger.error('Getting ORG')
+            self._logger.debug('Getting ORG')
         else:
             request_uri = f"/api/{API_VERSION}/chargepoints/owned"
-            self._logger.error('Getting OWNED')
+            self._logger.debug('Getting OWNED')
         response = await self._get(request_uri)
         res = []
         for chargepoint in await response.json():
