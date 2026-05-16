@@ -131,6 +131,7 @@ class ChargeAmpsClient:
         api_key: str,
         session: ClientSession,
         api_base_url: str | None = None,
+        organisation_id: str | None = None
     ):
         """Initialize."""
         self._logger = logging.getLogger(__name__).getChild(self.__class__.__name__)
@@ -140,6 +141,7 @@ class ChargeAmpsClient:
         self._session = session
         self._headers = {}
         self._base_url = api_base_url or API_BASE_URL
+        self._organisation_id = organisation_id
         self._ssl = True
         self._token = None
         self._token_expire = 0
@@ -241,7 +243,12 @@ class ChargeAmpsClient:
 
     async def get_chargepoints(self) -> list[ChargePoint]:
         """Get all owned chargepoints."""
-        request_uri = f"/api/{API_VERSION}/chargepoints/owned"
+        if self._organisation_id:
+            request_uri = f"/api/{API_VERSION}/organisations/{self._organisation_id}/chargepoints"
+            self._logger.error('Getting ORG')
+        else:
+            request_uri = f"/api/{API_VERSION}/chargepoints/owned"
+            self._logger.error('Getting OWNED')
         response = await self._get(request_uri)
         res = []
         for chargepoint in await response.json():

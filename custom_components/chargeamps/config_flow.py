@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from typing import Any
+from aiohttp import ClientResponseError
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -21,7 +22,8 @@ from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client import ChargeAmpsClient
-from .const import CONF_CHARGEPOINTS, CONF_WEBHOOK_ID, CONF_WEBHOOK_SECRET, DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import CONF_CHARGEPOINTS, CONF_WEBHOOK_ID, CONF_WEBHOOK_SECRET, CONF_ORGANISATION_ID, DEFAULT_SCAN_INTERVAL, DOMAIN
+from .exceptions import NoChargepointsError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,6 +48,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_EMAIL): str,
         vol.Required(CONF_PASSWORD): str,
         vol.Required(CONF_API_KEY): str,
+        vol.Optional(CONF_ORGANISATION_ID): str,
         vol.Optional(CONF_URL): str,
         vol.Optional(CONF_WEBHOOK_SECRET): str,
         vol.Optional(CONF_WEBHOOK_ID): str,
@@ -64,9 +67,12 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         api_key=data[CONF_API_KEY],
         session=async_get_clientsession(hass),
         api_base_url=data.get(CONF_URL),
+        organisation_id=data.get(CONF_ORGANISATION_ID)
     )
 
-    await client.get_chargepoints()
+    chargepoints = await client.get_chargepoints()
+    if not chargepoints:
+        raise NoChargepointsError
 
     return {"title": data[CONF_EMAIL]}
 
@@ -99,6 +105,15 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not errors:
                 try:
                     info = await validate_input(self.hass, user_input)
+                except NoChargepointsError:
+                    _LOGGER.error("No chargepoints returned by API")
+                    errors["base"] = "no_chargepoints"
+                except ClientResponseError as e:
+                    if e.status == 401:
+                        errors["base"] = "invalid_auth"
+                    else:
+                        _LOGGER.exception("Unexpected exception")
+                        errors["base"] = "unknown"
                 except Exception:  # pylint: disable=broad-except
                     _LOGGER.exception("Unexpected exception")
                     errors["base"] = "unknown"
@@ -133,6 +148,12 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not errors:
                 try:
                     await validate_input(self.hass, user_input)
+                except ClientResponseError as e:
+                    if e.status == 401:
+                        errors["base"] = "invalid_auth"
+                    else:
+                        _LOGGER.exception("Unexpected exception")
+                        errors["base"] = "unknown"
                 except Exception:
                     _LOGGER.exception("Unexpected exception during reconfigure")
                     errors["base"] = "unknown"
@@ -163,10 +184,18 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input.pop(CONF_WEBHOOK_SECRET, None)
             if not user_input.get(CONF_WEBHOOK_ID):
                 user_input.pop(CONF_WEBHOOK_ID, None)
+            if not user_input.get(CONF_ORGANISATION_ID):
+                user_input.pop(CONF_ORGANISATION_ID, None)
             errors |= _validate_webhook_overrides(user_input)
             if not errors:
                 try:
                     await validate_input(self.hass, user_input)
+                except ClientResponseError as e:
+                    if e.status == 401:
+                        errors["base"] = "invalid_auth"
+                    else:
+                        _LOGGER.exception("Unexpected exception")
+                        errors["base"] = "unknown"
                 except Exception:
                     _LOGGER.exception("Unexpected exception during re-auth")
                     errors["base"] = "unknown"
