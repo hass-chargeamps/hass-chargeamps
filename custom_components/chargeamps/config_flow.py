@@ -136,7 +136,7 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if CONF_CHARGEPOINTS in import_data:
             options[CONF_CHARGEPOINTS] = import_data.pop(CONF_CHARGEPOINTS)
 
-        clean_data = {k: v for k, v in import_data.items() if k in (CONF_EMAIL, CONF_PASSWORD, CONF_API_KEY, CONF_URL)}
+        clean_data = {k: v for k, v in import_data.items() if k in (CONF_EMAIL, CONF_PASSWORD, CONF_API_KEY, CONF_URL, CONF_ORGANISATION_ID)}
         return self.async_create_entry(title=clean_data[CONF_EMAIL], data=clean_data, options=options)
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -148,6 +148,9 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not errors:
                 try:
                     await validate_input(self.hass, user_input)
+                except NoChargepointsError:
+                    _LOGGER.error("No chargepoints returned by API")
+                    errors["base"] = "no_chargepoints"
                 except ClientResponseError as e:
                     if e.status == 401:
                         errors["base"] = "invalid_auth"
@@ -190,6 +193,9 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not errors:
                 try:
                     await validate_input(self.hass, user_input)
+                except NoChargepointsError:
+                    _LOGGER.error("No chargepoints returned by API")
+                    errors["base"] = "no_chargepoints"
                 except ClientResponseError as e:
                     if e.status == 401:
                         errors["base"] = "invalid_auth"
