@@ -32,6 +32,7 @@ from .const import (
     CONF_CHARGEPOINTS,
     CONF_WEBHOOK_ID,
     CONF_WEBHOOK_SECRET,
+    CONF_ORGANISATION_ID,
     CONFIGURATION_URL,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -66,6 +67,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         api_key=entry.data[CONF_API_KEY],
         session=async_get_clientsession(hass),
         api_base_url=entry.data.get(CONF_URL),
+        organisation_id=entry.data.get(CONF_ORGANISATION_ID)
     )
 
     scan_interval_seconds = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL.total_seconds())
