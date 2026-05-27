@@ -157,8 +157,6 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
         if user_input is not None:
-            if not user_input.get(CONF_ORGANISATION_ID):
-                user_input.pop(CONF_ORGANISATION_ID, None)
             errors |= _validate_webhook_overrides(user_input)
             if not errors:
                 try:

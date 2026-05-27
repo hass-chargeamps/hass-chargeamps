@@ -119,6 +119,13 @@
     "switch": {
       "enable": {
         "name": "{connector}"
+      },
+      "schedule": {
+        "name": "{connector} Schema",
+        "state": {
+          "on": "Aktiv",
+          "off": "Inaktiv"
+        }
       }
     },
     "lock": {
