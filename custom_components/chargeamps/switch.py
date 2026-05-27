@@ -27,6 +27,10 @@ SWITCHES: tuple[ChargeampsSwitchEntityDescription, ...] = (
         key="enable",
         translation_key="enable",
     ),
+    ChargeampsSwitchEntityDescription(
+        key="schedule",
+        translation_key="schedule",
+    ),
 )
 
 
@@ -54,27 +58,45 @@ class ChargeampsSwitch(ChargeAmpsEntity, SwitchEntity):
         self.entity_description = description
         self._attr_unique_id = f"{DOMAIN}_{charge_point_id}_{connector_id}_{description.key}"
 
+    def _mode(self) -> str | None:
+        settings = self.coordinator.data["connector_settings"].get((self.charge_point_id, self.connector_id))
+        return settings.mode if settings else None
+
+    async def _set_mode(self, mode: str) -> None:
+        settings = self.coordinator.data["connector_settings"].get((self.charge_point_id, self.connector_id))
+        if settings:
+            settings.mode = mode
+            await self.coordinator.client.set_chargepoint_connector_settings(settings)
+            await self.coordinator.async_request_refresh()
+
     @property
     def is_on(self) -> bool:
-        """Return true if charging is enabled."""
-        settings = self.coordinator.data["connector_settings"].get((self.charge_point_id, self.connector_id))
-        return settings.mode == "On" if settings else False
+        """Return true if the switch is on."""
+        mode = self._mode()
+        if self.entity_description.key == "enable":
+            # On when charging is authorized — either directly (On) or via schedule (Schedule)
+            return mode in ("On", "Schedule")
+        if self.entity_description.key == "schedule":
+            return mode == "Schedule"
+        return False
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the switch."""
-        settings = self.coordinator.data["connector_settings"].get((self.charge_point_id, self.connector_id))
-        if settings:
-            settings.mode = "On"
-            await self.coordinator.client.set_chargepoint_connector_settings(settings)
-            await self.coordinator.async_request_refresh()
+        if self.entity_description.key == "enable":
+            # No-op if schedule is active — don't silently exit schedule mode
+            if self._mode() != "Schedule":
+                await self._set_mode("On")
+        elif self.entity_description.key == "schedule":
+            await self._set_mode("Schedule")
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the switch."""
-        settings = self.coordinator.data["connector_settings"].get((self.charge_point_id, self.connector_id))
-        if settings:
-            settings.mode = "Off"
-            await self.coordinator.client.set_chargepoint_connector_settings(settings)
-            await self.coordinator.async_request_refresh()
+        if self.entity_description.key == "enable":
+            # Always sets Off — explicitly overrides the schedule if one is active
+            await self._set_mode("Off")
+        elif self.entity_description.key == "schedule":
+            # Return to unrestricted charging rather than leaving the charger off
+            await self._set_mode("On")
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -82,6 +104,7 @@ class ChargeampsSwitch(ChargeAmpsEntity, SwitchEntity):
         attrs = {"charge_point_id": self.charge_point_id, "connector_id": self.connector_id}
         settings = self.coordinator.data["connector_settings"].get((self.charge_point_id, self.connector_id))
         if settings:
+            attrs["mode"] = settings.mode
             attrs["cable_lock"] = settings.cable_lock
             attrs["max_current"] = round(settings.max_current or 0)
         return attrs
