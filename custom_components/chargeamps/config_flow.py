@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from typing import Any
+from aiohttp import ClientResponseError
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -21,7 +22,8 @@ from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client import ChargeAmpsClient
-from .const import CONF_CHARGEPOINTS, CONF_WEBHOOK_ID, CONF_WEBHOOK_SECRET, DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import CONF_CHARGEPOINTS, CONF_WEBHOOK_ID, CONF_WEBHOOK_SECRET, CONF_ORGANISATION_ID, DEFAULT_SCAN_INTERVAL, DOMAIN
+from .exceptions import NoChargepointsError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,6 +31,23 @@ _LOGGER = logging.getLogger(__name__)
 _WEBHOOK_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
 # Webhook secret must be printable, non-whitespace ASCII (it's sent as an HTTP header value)
 _WEBHOOK_SECRET_RE = re.compile(r"^[^\s\x00-\x1f\x7f]+$")
+
+
+def _errors_from_validate_exception(exc: Exception) -> tuple[dict[str, str], bool]:
+    """Map a validate_input exception to a config flow errors dict.
+
+    Returns (errors, logged) — logged is True if the exception was already logged.
+    """
+    if isinstance(exc, NoChargepointsError):
+        _LOGGER.error("No chargepoints returned by API for the given organisation ID")
+        return {"base": "no_chargepoints"}, True
+    if isinstance(exc, ClientResponseError):
+        if exc.status == 401:
+            return {"base": "invalid_auth"}, False
+        else:
+            _LOGGER.exception("Unexpected HTTP error during config validation")
+            return {"base": "unknown"}, True
+    return {}, False
 
 
 def _validate_webhook_overrides(user_input: dict[str, Any]) -> dict[str, str]:
@@ -46,6 +65,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_EMAIL): str,
         vol.Required(CONF_PASSWORD): str,
         vol.Required(CONF_API_KEY): str,
+        vol.Optional(CONF_ORGANISATION_ID): str,
         vol.Optional(CONF_URL): str,
         vol.Optional(CONF_WEBHOOK_SECRET): str,
         vol.Optional(CONF_WEBHOOK_ID): str,
@@ -64,9 +84,12 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         api_key=data[CONF_API_KEY],
         session=async_get_clientsession(hass),
         api_base_url=data.get(CONF_URL),
+        organisation_id=data.get(CONF_ORGANISATION_ID),
     )
 
-    await client.get_chargepoints()
+    chargepoints = await client.get_chargepoints()
+    if not chargepoints and data.get(CONF_ORGANISATION_ID):
+        raise NoChargepointsError
 
     return {"title": data[CONF_EMAIL]}
 
@@ -95,13 +118,17 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input.pop(CONF_WEBHOOK_SECRET, None)
             if not user_input.get(CONF_WEBHOOK_ID):
                 user_input.pop(CONF_WEBHOOK_ID, None)
+            if not user_input.get(CONF_ORGANISATION_ID):
+                user_input.pop(CONF_ORGANISATION_ID, None)
             errors |= _validate_webhook_overrides(user_input)
             if not errors:
                 try:
                     info = await validate_input(self.hass, user_input)
-                except Exception:  # pylint: disable=broad-except
-                    _LOGGER.exception("Unexpected exception")
-                    errors["base"] = "unknown"
+                except Exception as exc:  # pylint: disable=broad-except
+                    mapped, logged = _errors_from_validate_exception(exc)
+                    if not logged:
+                        _LOGGER.exception("Unexpected exception")
+                    errors.update(mapped or {"base": "unknown"})
                 else:
                     return self.async_create_entry(title=info["title"], data=user_input)
 
@@ -121,7 +148,8 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if CONF_CHARGEPOINTS in import_data:
             options[CONF_CHARGEPOINTS] = import_data.pop(CONF_CHARGEPOINTS)
 
-        clean_data = {k: v for k, v in import_data.items() if k in (CONF_EMAIL, CONF_PASSWORD, CONF_API_KEY, CONF_URL)}
+        allowed = (CONF_EMAIL, CONF_PASSWORD, CONF_API_KEY, CONF_URL, CONF_ORGANISATION_ID)
+        clean_data = {k: v for k, v in import_data.items() if k in allowed}
         return self.async_create_entry(title=clean_data[CONF_EMAIL], data=clean_data, options=options)
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -133,14 +161,16 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not errors:
                 try:
                     await validate_input(self.hass, user_input)
-                except Exception:
-                    _LOGGER.exception("Unexpected exception during reconfigure")
-                    errors["base"] = "unknown"
+                except Exception as exc:
+                    mapped, logged = _errors_from_validate_exception(exc)
+                    if not logged:
+                        _LOGGER.exception("Unexpected exception during reconfigure")
+                    errors.update(mapped or {"base": "unknown"})
                 else:
                     await self.async_set_unique_id(user_input[CONF_EMAIL].lower())
                     self._abort_if_unique_id_mismatch(reason="wrong_account")
                     new_data = {**entry.data, **user_input}
-                    for key in (CONF_WEBHOOK_SECRET, CONF_WEBHOOK_ID):
+                    for key in (CONF_WEBHOOK_SECRET, CONF_WEBHOOK_ID, CONF_ORGANISATION_ID):
                         if not new_data.get(key):
                             new_data.pop(key, None)
                     return self.async_update_reload_and_abort(entry, data=new_data)
@@ -163,13 +193,17 @@ class ChargeAmpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input.pop(CONF_WEBHOOK_SECRET, None)
             if not user_input.get(CONF_WEBHOOK_ID):
                 user_input.pop(CONF_WEBHOOK_ID, None)
+            if not user_input.get(CONF_ORGANISATION_ID):
+                user_input.pop(CONF_ORGANISATION_ID, None)
             errors |= _validate_webhook_overrides(user_input)
             if not errors:
                 try:
                     await validate_input(self.hass, user_input)
-                except Exception:
-                    _LOGGER.exception("Unexpected exception during re-auth")
-                    errors["base"] = "unknown"
+                except Exception as exc:
+                    mapped, logged = _errors_from_validate_exception(exc)
+                    if not logged:
+                        _LOGGER.exception("Unexpected exception during re-auth")
+                    errors.update(mapped or {"base": "unknown"})
                 else:
                     entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
                     self.hass.config_entries.async_update_entry(entry, data={**entry.data, **user_input})

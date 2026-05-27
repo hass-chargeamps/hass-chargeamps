@@ -7,3 +7,5 @@ local-docs/
 Charge_Amps_External_Api_version_4.0.pdf
 .env
 .claude/
+*.pyc
+.DS_Store
