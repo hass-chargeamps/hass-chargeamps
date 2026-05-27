@@ -131,7 +131,7 @@ class ChargeAmpsClient:
         api_key: str,
         session: ClientSession,
         api_base_url: str | None = None,
-        organisation_id: str | None = None
+        organisation_id: str | None = None,
     ):
         """Initialize."""
         self._logger = logging.getLogger(__name__).getChild(self.__class__.__name__)
@@ -245,10 +245,10 @@ class ChargeAmpsClient:
         """Get all owned chargepoints."""
         if self._organisation_id:
             request_uri = f"/api/{API_VERSION}/organisations/{self._organisation_id}/chargepoints"
-            self._logger.debug('Getting ORG')
+            self._logger.debug("Fetching chargepoints for organisation %s: %s", self._organisation_id, request_uri)
         else:
             request_uri = f"/api/{API_VERSION}/chargepoints/owned"
-            self._logger.debug('Getting OWNED')
+            self._logger.debug("Fetching owned chargepoints: %s", request_uri)
         response = await self._get(request_uri)
         res = []
         for chargepoint in await response.json():

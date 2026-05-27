@@ -1,7 +1,10 @@
 class APIError(Exception):
-    """Base exception for API-related errors"""
+    """Base exception for API-related errors."""
+
     pass
 
+
 class NoChargepointsError(APIError):
-    """No Chargepoints was returned by the API"""
+    """No chargepoints were returned by the API for the given organisation ID."""
+
     pass
