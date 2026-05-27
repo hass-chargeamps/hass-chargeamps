@@ -44,8 +44,9 @@ def _errors_from_validate_exception(exc: Exception) -> tuple[dict[str, str], boo
     if isinstance(exc, ClientResponseError):
         if exc.status == 401:
             return {"base": "invalid_auth"}, False
-        _LOGGER.exception("Unexpected HTTP error during config validation")
-        return {"base": "unknown"}, True
+        else:
+            _LOGGER.exception("Unexpected HTTP error during config validation")
+            return {"base": "unknown"}, True
     return {}, False
 
 
