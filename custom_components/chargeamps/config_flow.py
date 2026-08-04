@@ -229,7 +229,8 @@ class ChargeAmpsOptionsFlowHandler(config_entries.OptionsFlow):
         coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
         chargepoints: dict[str, str] = {}
         if coordinator and coordinator.data:
-            chargepoints = {cp_id: cp.name or cp_id for cp_id, cp in coordinator.data.get("chargepoints", {}).items()}
+            available = coordinator.data.get("available_chargepoints") or coordinator.data.get("chargepoints", {})
+            chargepoints = {cp_id: cp.name or cp_id for cp_id, cp in available.items()}
 
         return self.async_show_form(
             step_id="init",

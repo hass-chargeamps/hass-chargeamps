@@ -308,9 +308,23 @@ class ChargeAmpsClient:
             self._discovered_organisation_ids = organisation_ids
 
         by_id: dict[str, ChargePoint] = {}
+        failed: list[str] = []
         for organisation_id in organisation_ids:
-            for chargepoint in await self.get_organisation_chargepoints(organisation_id):
+            try:
+                chargepoints = await self.get_organisation_chargepoints(organisation_id)
+            except ClientResponseError as exc:
+                # Membership does not guarantee chargepoint access in every organisation.
+                # Skip the ones that deny us rather than losing the ones that do not.
+                if exc.status not in (401, 403, 404):
+                    raise
+                self._logger.debug("No chargepoint access in organisation %s (HTTP %d)", organisation_id, exc.status)
+                failed.append(organisation_id)
+                continue
+            for chargepoint in chargepoints:
                 by_id.setdefault(chargepoint.id, chargepoint)
+
+        if failed and len(failed) == len(organisation_ids):
+            self._logger.warning("Chargepoint access denied in all %d organisation(s) of this account", len(failed))
 
         if not by_id:
             # Membership may have changed since discovery — re-discover on the next poll.
