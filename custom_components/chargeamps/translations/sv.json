@@ -10,7 +10,7 @@
           "email": "Email",
           "password": "Lösenord",
           "api_key": "API-nyckel",
-          "organisation_id": "Organisations-ID (frivilligt)",
+          "organisation_id": "Organisations-ID (frivilligt \u2014 l\u00e4mna tomt f\u00f6r att uppt\u00e4cka automatiskt)",
           "url": "API Bas-URL (frivilligt)",
           "webhook_secret": "Webhook hemlighet (frivilligt — lämna tomt för att autogenerera från API-nyckel).",
           "webhook_id": "Webhook URL ID (frivilligt — lämna tomt för att autogenerera från email)"
@@ -23,7 +23,7 @@
           "email": "Email",
           "password": "Lösenord",
           "api_key": "API-nyckel",
-          "organisation_id": "Organisations-ID (frivilligt)",
+          "organisation_id": "Organisations-ID (frivilligt \u2014 l\u00e4mna tomt f\u00f6r att uppt\u00e4cka automatiskt)",
           "url": "API Bas-URL (frivilligt)",
           "webhook_secret": "Webhook hemlighet (frivilligt — lämna tomt för att autogenerera från API-nyckel).",
           "webhook_id": "Webhook URL ID (frivilligt — lämna tomt för att autogenerera från email)"
@@ -36,7 +36,7 @@
           "email": "Email",
           "password": "Lösenord",
           "api_key": "API-nyckel",
-          "organisation_id": "Organisations-ID (frivilligt)",
+          "organisation_id": "Organisations-ID (frivilligt \u2014 l\u00e4mna tomt f\u00f6r att uppt\u00e4cka automatiskt)",
           "url": "API Bas-URL (frivilligt)",
           "webhook_secret": "Webhook hemlighet (frivilligt — lämna tomt för att behålla nuvarande).",
           "webhook_id": "Webhook URL ID (frivilligt — lämna tomt för att behålla nuvarande)"
@@ -49,7 +49,7 @@
       "unknown": "Ett oväntat fel uppstod",
       "invalid_webhook_id": "Bara bokstäver, nummer, bindestreck, och understreck är tillåtna",
       "invalid_webhook_secret": "Måste vara skrivbara tecken utan mellanslag",
-      "no_chargepoints": "Inga laddpunkter funna"
+      "no_chargepoints": "Inga laddpunkter hittades f\u00f6r kontot"
     },
     "abort": {
       "already_configured": "Enheten är redan konfigurerad",

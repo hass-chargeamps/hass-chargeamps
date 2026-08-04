@@ -39,7 +39,7 @@ def _errors_from_validate_exception(exc: Exception) -> tuple[dict[str, str], boo
     Returns (errors, logged) — logged is True if the exception was already logged.
     """
     if isinstance(exc, NoChargepointsError):
-        _LOGGER.error("No chargepoints returned by API for the given organisation ID")
+        _LOGGER.error("No chargepoints reachable for this account (neither owned nor via any organisation)")
         return {"base": "no_chargepoints"}, True
     if isinstance(exc, ClientResponseError):
         if exc.status == 401:
@@ -88,7 +88,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     )
 
     chargepoints = await client.get_chargepoints()
-    if not chargepoints and data.get(CONF_ORGANISATION_ID):
+    if not chargepoints:
         raise NoChargepointsError
 
     return {"title": data[CONF_EMAIL]}

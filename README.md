@@ -25,7 +25,18 @@ Copy `custom_components/chargeamps` into your Home Assistant `config/custom_comp
    - **Email**: Your Charge Amps account email.
    - **Password**: Your Charge Amps account password.
    - **API Key**: Required (Get one from [Charge Amps Support](https://www.chargeamps.com/support/)).
+   - **Organisation ID**: Optional, see below.
 4. Click **Submit**.
+
+### Organisation-owned chargers
+
+If the charger belongs to an organisation rather than to you personally, the integration
+finds it automatically: when your account owns no chargers, it looks up the organisations
+your account belongs to and loads the chargers from all of them.
+
+Fill in **Organisation ID** only if you want to restrict the integration to a single
+organisation. Setup now fails with *No chargepoints found for this account* instead of
+silently creating an entry with no entities.
 
 ## Features
 

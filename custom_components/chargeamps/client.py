@@ -7,7 +7,7 @@ from datetime import datetime
 from urllib.parse import urljoin
 
 import jwt
-from aiohttp import ClientResponse, ClientSession
+from aiohttp import ClientResponse, ClientResponseError, ClientSession
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
@@ -37,15 +37,23 @@ class ChargePoint(ChargeAmpsBaseModel):
     """Charge point model."""
 
     id: str
-    name: str
-    password: str
-    type: str
-    is_loadbalanced: bool
+    name: str | None = None
+    password: str | None = None
+    type: str | None = None
+    is_loadbalanced: bool = False
     firmware_version: str | None = None
     hardware_version: str | None = None
     owner_read_only: bool = False
     ocpp_version: str | None = None
-    connectors: list[ChargePointConnector]
+    connectors: list[ChargePointConnector] = []
+
+
+class Organisation(ChargeAmpsBaseModel):
+    """Organisation model."""
+
+    id: str
+    name: str | None = None
+    description: str | None = None
 
 
 class ChargePointMeasurement(ChargeAmpsBaseModel):
@@ -142,6 +150,7 @@ class ChargeAmpsClient:
         self._headers = {}
         self._base_url = api_base_url or API_BASE_URL
         self._organisation_id = organisation_id
+        self._discovered_organisation_ids: list[str] | None = None
         self._ssl = True
         self._token = None
         self._token_expire = 0
@@ -241,19 +250,73 @@ class ChargeAmpsClient:
         response = await self._session.put(urljoin(self._base_url, path), ssl=self._ssl, headers=headers, **kwargs)
         return await self._handle_response(response)
 
-    async def get_chargepoints(self) -> list[ChargePoint]:
-        """Get all owned chargepoints."""
-        if self._organisation_id:
-            request_uri = f"/api/{API_VERSION}/organisations/{self._organisation_id}/chargepoints"
-            self._logger.debug("Fetching chargepoints for organisation %s: %s", self._organisation_id, request_uri)
-        else:
-            request_uri = f"/api/{API_VERSION}/chargepoints/owned"
-            self._logger.debug("Fetching owned chargepoints: %s", request_uri)
+    async def get_organisations(self) -> list[Organisation]:
+        """Get all organisations the account is a member of.
+
+        Requires the "Enterprise" role on the account. A private-only account gets 401/403,
+        and an API base URL without the endpoint gets 404 — both mean "no organisations"
+        rather than a failure, since this is only ever a fallback lookup.
+        """
+        request_uri = f"/api/{API_VERSION}/organisations"
+        try:
+            response = await self._get(request_uri)
+        except ClientResponseError as exc:
+            if exc.status in (401, 403, 404):
+                self._logger.debug("Account has no access to organisations (HTTP %d)", exc.status)
+                return []
+            raise
+        return [Organisation.model_validate(org) for org in await response.json()]
+
+    async def get_owned_chargepoints(self) -> list[ChargePoint]:
+        """Get the chargepoints owned by the account itself."""
+        request_uri = f"/api/{API_VERSION}/chargepoints/owned"
+        self._logger.debug("Fetching owned chargepoints: %s", request_uri)
         response = await self._get(request_uri)
-        res = []
-        for chargepoint in await response.json():
-            res.append(ChargePoint.model_validate(chargepoint))
-        return res
+        return [ChargePoint.model_validate(cp) for cp in await response.json()]
+
+    async def get_organisation_chargepoints(self, organisation_id: str) -> list[ChargePoint]:
+        """Get the chargepoints belonging to a single organisation."""
+        request_uri = f"/api/{API_VERSION}/organisations/{organisation_id}/chargepoints"
+        self._logger.debug("Fetching chargepoints for organisation %s: %s", organisation_id, request_uri)
+        response = await self._get(request_uri)
+        return [ChargePoint.model_validate(cp) for cp in await response.json()]
+
+    async def get_chargepoints(self) -> list[ChargePoint]:
+        """Get all chargepoints reachable by the account.
+
+        With an explicit organisation ID configured, only that organisation is queried.
+        Otherwise the owned chargepoints are returned, falling back to a lookup of the
+        account's organisations when the account owns nothing itself — an org admin who
+        is not the owner of any chargepoint would otherwise see an empty integration.
+        """
+        if self._organisation_id:
+            return await self.get_organisation_chargepoints(self._organisation_id)
+
+        chargepoints = await self.get_owned_chargepoints()
+        if chargepoints:
+            return chargepoints
+
+        organisation_ids = self._discovered_organisation_ids
+        if organisation_ids is None:
+            organisations = await self.get_organisations()
+            self._logger.debug(
+                "No owned chargepoints, discovered %d organisation(s): %s",
+                len(organisations),
+                ", ".join(f"{org.name or '?'} ({org.id})" for org in organisations),
+            )
+            organisation_ids = [org.id for org in organisations]
+            self._discovered_organisation_ids = organisation_ids
+
+        by_id: dict[str, ChargePoint] = {}
+        for organisation_id in organisation_ids:
+            for chargepoint in await self.get_organisation_chargepoints(organisation_id):
+                by_id.setdefault(chargepoint.id, chargepoint)
+
+        if not by_id:
+            # Membership may have changed since discovery — re-discover on the next poll.
+            self._discovered_organisation_ids = None
+            self._logger.warning("Account owns no chargepoints and none were found via its organisations")
+        return list(by_id.values())
 
     async def get_all_chargingsessions(
         self,
