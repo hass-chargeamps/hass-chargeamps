@@ -41,6 +41,7 @@ class ChargeAmpsDataUpdateCoordinator(DataUpdateCoordinator):
             update_interval=update_interval,
         )
         self.data: dict[str, Any] = {
+            "available_chargepoints": {},
             "chargepoints": {},
             "status": {},
             "settings": {},
@@ -56,6 +57,9 @@ class ChargeAmpsDataUpdateCoordinator(DataUpdateCoordinator):
                 [cp for cp in all_chargepoints if cp.id in self._chargepoint_ids] if self._chargepoint_ids else all_chargepoints
             )
             data: dict[str, Any] = {
+                # Every reachable chargepoint, so the options flow can still offer the ones
+                # currently filtered out; "chargepoints" holds only those actually polled.
+                "available_chargepoints": {cp.id: cp for cp in all_chargepoints},
                 "chargepoints": {cp.id: cp for cp in chargepoints},
                 "status": {},
                 "settings": {},

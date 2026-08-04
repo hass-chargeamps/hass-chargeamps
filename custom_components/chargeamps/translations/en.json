@@ -10,7 +10,7 @@
           "email": "Email",
           "password": "Password",
           "api_key": "API Key",
-          "organisation_id": "Organisation ID (optional)",
+          "organisation_id": "Organisation ID (optional \u2014 leave blank to auto-detect)",
           "url": "API Base URL (optional)",
           "webhook_secret": "Webhook secret (optional — leave blank to auto-derive from API key)",
           "webhook_id": "Webhook URL ID (optional — leave blank to auto-derive from email)"
@@ -23,7 +23,7 @@
           "email": "Email",
           "password": "Password",
           "api_key": "API Key",
-          "organisation_id": "Organisation ID (optional)",
+          "organisation_id": "Organisation ID (optional \u2014 leave blank to auto-detect)",
           "url": "API Base URL (optional)",
           "webhook_secret": "Webhook secret (optional — leave blank to reset to auto-derived)",
           "webhook_id": "Webhook URL ID (optional — leave blank to reset to auto-derived)"
@@ -36,7 +36,7 @@
           "email": "Email",
           "password": "Password",
           "api_key": "API Key",
-          "organisation_id": "Organisation ID (optional)",
+          "organisation_id": "Organisation ID (optional \u2014 leave blank to auto-detect)",
           "url": "API Base URL (optional)",
           "webhook_secret": "Webhook secret (optional — leave blank to keep existing)",
           "webhook_id": "Webhook URL ID (optional — leave blank to keep existing)"
@@ -49,7 +49,7 @@
       "unknown": "Unexpected error",
       "invalid_webhook_id": "Only letters, numbers, hyphens, and underscores are allowed",
       "invalid_webhook_secret": "Must be printable characters with no whitespace",
-      "no_chargepoints": "No chargepoints found"
+      "no_chargepoints": "No chargepoints found for this account"
     },
     "abort": {
       "already_configured": "Device is already configured",

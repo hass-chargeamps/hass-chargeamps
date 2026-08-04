@@ -39,7 +39,7 @@ def _errors_from_validate_exception(exc: Exception) -> tuple[dict[str, str], boo
     Returns (errors, logged) — logged is True if the exception was already logged.
     """
     if isinstance(exc, NoChargepointsError):
-        _LOGGER.error("No chargepoints returned by API for the given organisation ID")
+        _LOGGER.error("No chargepoints reachable for this account (neither owned nor via any organisation)")
         return {"base": "no_chargepoints"}, True
     if isinstance(exc, ClientResponseError):
         if exc.status == 401:
@@ -88,7 +88,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     )
 
     chargepoints = await client.get_chargepoints()
-    if not chargepoints and data.get(CONF_ORGANISATION_ID):
+    if not chargepoints:
         raise NoChargepointsError
 
     return {"title": data[CONF_EMAIL]}
@@ -229,7 +229,8 @@ class ChargeAmpsOptionsFlowHandler(config_entries.OptionsFlow):
         coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
         chargepoints: dict[str, str] = {}
         if coordinator and coordinator.data:
-            chargepoints = {cp_id: cp.name or cp_id for cp_id, cp in coordinator.data.get("chargepoints", {}).items()}
+            available = coordinator.data.get("available_chargepoints") or coordinator.data.get("chargepoints", {})
+            chargepoints = {cp_id: cp.name or cp_id for cp_id, cp in available.items()}
 
         return self.async_show_form(
             step_id="init",
