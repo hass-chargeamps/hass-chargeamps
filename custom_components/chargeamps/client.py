@@ -4,15 +4,21 @@ import asyncio
 import logging
 import time
 from datetime import datetime
+from typing import Any
 from urllib.parse import urljoin
 
 import jwt
 from aiohttp import ClientResponse, ClientResponseError, ClientSession
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from pydantic.alias_generators import to_camel
 
 API_BASE_URL = "https://eapi.charge.space"
 API_VERSION = "v5"
+
+# Statuses that mean "this account cannot see that" rather than "something went wrong":
+# 401/403 for an account without the Enterprise role, 404 for an API base URL that
+# predates the organisation endpoints.
+_NO_ACCESS_STATUSES = (401, 403, 404)
 
 
 class ChargeAmpsBaseModel(BaseModel):
@@ -24,13 +30,26 @@ class ChargeAmpsBaseModel(BaseModel):
         from_attributes=True,
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _nulls_as_missing(cls, data: Any) -> Any:
+        """Treat an explicit null like an absent key so field defaults apply.
+
+        Nearly every property in the API schema is nullable, and which ones actually
+        come back null depends on the caller's access level — an administrator who does
+        not own a chargepoint gets no password for it, for instance.
+        """
+        if not isinstance(data, dict):
+            return data
+        return {key: value for key, value in data.items() if value is not None}
+
 
 class ChargePointConnector(ChargeAmpsBaseModel):
     """Charge point connector model."""
 
-    charge_point_id: str
+    charge_point_id: str | None = None
     connector_id: int
-    type: str
+    type: str | None = None
 
 
 class ChargePoint(ChargeAmpsBaseModel):
@@ -83,7 +102,7 @@ class ChargePointStatus(ChargeAmpsBaseModel):
 
     id: str
     status: str
-    connector_statuses: list[ChargePointConnectorStatus]
+    connector_statuses: list[ChargePointConnectorStatus] = []
 
 
 class ChargePointSettings(ChargeAmpsBaseModel):
@@ -157,11 +176,18 @@ class ChargeAmpsClient:
         self._refresh_token = None
         self._token_lock = asyncio.Lock()
 
-    async def _handle_response(self, response: ClientResponse) -> ClientResponse:
-        """Handle response and log errors."""
+    async def _handle_response(self, response: ClientResponse, expected_errors: tuple[int, ...] = ()) -> ClientResponse:
+        """Handle response and log errors.
+
+        Statuses listed in expected_errors still raise, but are logged at debug level —
+        the caller handles them as a normal outcome rather than a fault.
+        """
         if response.status >= 400:
             error_text = await response.text()
-            self._logger.error("API Error %d: %s for %s", response.status, error_text, response.url)
+            if response.status in expected_errors:
+                self._logger.debug("API returned expected %d for %s", response.status, response.url)
+            else:
+                self._logger.error("API Error %d: %s for %s", response.status, error_text, response.url)
             response.raise_for_status()
         return response
 
@@ -236,12 +262,12 @@ class ChargeAmpsClient:
         response = await self._session.post(urljoin(self._base_url, path), ssl=self._ssl, headers=headers, **kwargs)
         return await self._handle_response(response)
 
-    async def _get(self, path, **kwargs) -> ClientResponse:
+    async def _get(self, path, expected_errors: tuple[int, ...] = (), **kwargs) -> ClientResponse:
         """Perform a GET request."""
         await self._ensure_token()
         headers = kwargs.pop("headers", self._headers)
         response = await self._session.get(urljoin(self._base_url, path), ssl=self._ssl, headers=headers, **kwargs)
-        return await self._handle_response(response)
+        return await self._handle_response(response, expected_errors)
 
     async def _put(self, path, **kwargs) -> ClientResponse:
         """Perform a PUT request."""
@@ -259,9 +285,9 @@ class ChargeAmpsClient:
         """
         request_uri = f"/api/{API_VERSION}/organisations"
         try:
-            response = await self._get(request_uri)
+            response = await self._get(request_uri, expected_errors=_NO_ACCESS_STATUSES)
         except ClientResponseError as exc:
-            if exc.status in (401, 403, 404):
+            if exc.status in _NO_ACCESS_STATUSES:
                 self._logger.debug("Account has no access to organisations (HTTP %d)", exc.status)
                 return []
             raise
@@ -274,11 +300,11 @@ class ChargeAmpsClient:
         response = await self._get(request_uri)
         return [ChargePoint.model_validate(cp) for cp in await response.json()]
 
-    async def get_organisation_chargepoints(self, organisation_id: str) -> list[ChargePoint]:
+    async def get_organisation_chargepoints(self, organisation_id: str, expected_errors: tuple[int, ...] = ()) -> list[ChargePoint]:
         """Get the chargepoints belonging to a single organisation."""
         request_uri = f"/api/{API_VERSION}/organisations/{organisation_id}/chargepoints"
         self._logger.debug("Fetching chargepoints for organisation %s: %s", organisation_id, request_uri)
-        response = await self._get(request_uri)
+        response = await self._get(request_uri, expected_errors=expected_errors)
         return [ChargePoint.model_validate(cp) for cp in await response.json()]
 
     async def get_chargepoints(self) -> list[ChargePoint]:
@@ -311,11 +337,11 @@ class ChargeAmpsClient:
         failed: list[str] = []
         for organisation_id in organisation_ids:
             try:
-                chargepoints = await self.get_organisation_chargepoints(organisation_id)
+                chargepoints = await self.get_organisation_chargepoints(organisation_id, expected_errors=_NO_ACCESS_STATUSES)
             except ClientResponseError as exc:
                 # Membership does not guarantee chargepoint access in every organisation.
                 # Skip the ones that deny us rather than losing the ones that do not.
-                if exc.status not in (401, 403, 404):
+                if exc.status not in _NO_ACCESS_STATUSES:
                     raise
                 self._logger.debug("No chargepoint access in organisation %s (HTTP %d)", organisation_id, exc.status)
                 failed.append(organisation_id)
